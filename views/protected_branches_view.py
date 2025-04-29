@@ -2,7 +2,7 @@
 View para a tela de seleção de branches protegidas
 """
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-                           QCheckBox, QFrame, QScrollArea, QMessageBox, QSizePolicy, QLineEdit)
+                           QCheckBox, QFrame, QScrollArea, QMessageBox, QSizePolicy, QLineEdit, QProgressBar)
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
 
@@ -83,6 +83,43 @@ class ProtectedBranchesView(QWidget):
         title_layout.addWidget(self.project_name_label, 1)
         
         layout.addWidget(title_frame)
+        
+        # Indicador de carregamento
+        self.loading_frame = QFrame()
+        self.loading_frame.setStyleSheet("""
+            QFrame {
+                background-color: #FFF8E1;
+                border: 1px solid #FFE082;
+                border-radius: 4px;
+            }
+        """)
+        loading_layout = QVBoxLayout(self.loading_frame)
+        loading_layout.setContentsMargins(15, 10, 15, 10)
+        loading_layout.setSpacing(8)
+        
+        self.loading_label = QLabel("Carregando branches...")
+        self.loading_label.setStyleSheet("color: #5D4037; font-weight: bold;")
+        loading_layout.addWidget(self.loading_label)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #FFE082;
+                border-radius: 4px;
+                text-align: center;
+                background-color: #FFFFFF;
+            }
+            QProgressBar::chunk {
+                background-color: #FFA000;
+                width: 20px;
+            }
+        """)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(0)  # Barra de progresso indeterminada
+        loading_layout.addWidget(self.progress_bar)
+        
+        layout.addWidget(self.loading_frame)
+        self.loading_frame.setVisible(False)  # Inicialmente oculto
         
         # Explicação
         info_frame = QFrame()
@@ -354,6 +391,7 @@ class ProtectedBranchesView(QWidget):
         self._disable_button_style(self.confirm_button)
         self._disable_button_style(self.select_all_button)
         self._disable_button_style(self.deselect_all_button)
+        self.back_button.setEnabled(True)  # Manter o botão de voltar habilitado
         
     def _enable_action_buttons(self):
         """Habilita todos os botões de ação"""
@@ -427,6 +465,9 @@ class ProtectedBranchesView(QWidget):
                 # Se ocorrer erro porque os checkboxes foram destruídos
                 # (durante navegação rápida entre projetos)
                 selected_branches['protected_by_app'] = []
+        
+        # Adicionar o estado do checkbox de ocultar branches protegidas
+        selected_branches['hide_protected'] = self.hide_protected_checkbox.isChecked()
         
         self.protected_branches_selected_signal.emit(selected_branches)
     
@@ -563,4 +604,50 @@ class ProtectedBranchesView(QWidget):
         Método público para desabilitar os botões quando solicitado externamente
         por outras views
         """
+        self._disable_all_buttons()
+        
+    def set_loading_state(self, is_loading, message="Carregando..."):
+        """
+        Exibe ou oculta o indicador de carregamento
+        
+        Args:
+            is_loading (bool): True para mostrar o carregamento, False para ocultar
+            message (str): Mensagem a ser exibida durante o carregamento
+        """
+        self.loading_frame.setVisible(is_loading)
+        self.loading_label.setText(message)
+        
+        # Desabilitar os elementos interativos durante o carregamento
+        if is_loading:
+            self._disable_all_buttons()
+            self.filter_input.setEnabled(False)
+        else:
+            self.filter_input.setEnabled(True)
+            # Não reabilitamos os botões aqui - isso é feito no set_branches
+        
+    def clear_branches(self):
+        """
+        Limpa as branches das listas
+        """
+        # Limpar os dicionários de checkboxes
+        self.checkboxes.clear()
+        self.gitlab_protected_checkboxes.clear()
+        
+        # Limpar layouts
+        self._clear_layout(self.gitlab_protected_layout)
+        self._clear_layout(self.branches_layout)
+        
+        # Adicionar placeholders
+        no_branches_label_gitlab = QLabel("Carregando branches protegidas...")
+        no_branches_label_gitlab.setStyleSheet("color: #666666; font-style: italic;")
+        self.gitlab_protected_layout.addWidget(no_branches_label_gitlab)
+        self.gitlab_protected_layout.addStretch()
+        
+        no_branches_label = QLabel("Carregando branches do repositório...")
+        no_branches_label.setStyleSheet("color: #666666; font-style: italic;")
+        self.branches_layout.addWidget(no_branches_label)
+        self.branches_layout.addStretch()
+        
+        # Desabilitar filtro e botões durante o carregamento
+        self.filter_input.clear()
         self._disable_all_buttons() 

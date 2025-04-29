@@ -230,7 +230,6 @@ class BranchesView(QWidget):
         if os.path.exists(closed_icon_path) and os.path.exists(open_icon_path):
             self.branches_tree.setProperty("closed_icon", closed_icon_path)
             self.branches_tree.setProperty("open_icon", open_icon_path)
-            print(f"Ícones carregados: {closed_icon_path}, {open_icon_path}")
         else:
             print(f"AVISO: Ícones não encontrados: {closed_icon_path}, {open_icon_path}")
         

@@ -127,6 +127,11 @@ class AppController(QObject):
         self.current_project_id = project_id
         self.current_project_name = project_name
         self.protected_branches_view.set_project_name(project_name)
+        
+        # Limpar branches anteriores e mostrar indicador de carregamento
+        self.protected_branches_view.clear_branches()
+        self.protected_branches_view.set_loading_state(True, "Carregando branches protegidas...")
+        
         self.tab_widget.clear()
         self.tab_widget.addTab(self.protected_branches_view, "Configurar Branches Protegidas")
         
@@ -152,6 +157,9 @@ class AppController(QObject):
         """Slot chamado na thread principal quando as branches protegidas são carregadas"""
         self.gitlab_protected_branches = gitlab_protected_branches
         
+        # Atualizar mensagem de carregamento
+        self.protected_branches_view.set_loading_state(True, "Carregando todas as branches do projeto...")
+        
         # Agora carregar todas as branches do projeto
         def on_branches_loaded(success, result):
             if success:
@@ -161,6 +169,8 @@ class AppController(QObject):
                 # Exibir mensagem de erro na thread principal
                 self.window.statusBar().showMessage(f"Erro ao carregar branches: {result}")
                 QMessageBox.critical(self.window, "Erro", f"Falha ao carregar branches: {result}")
+                # Esconder indicador de carregamento em caso de erro
+                self.protected_branches_view.set_loading_state(False)
         
         # Chamar diretamente a API para obter as branches
         success, result = self.gitlab_api.get_branches(self.current_project_id)
@@ -171,6 +181,9 @@ class AppController(QObject):
         """Slot chamado na thread principal quando as branches do projeto são carregadas"""
         # Extrair apenas os nomes das branches
         project_branches = [branch.name for branch in branches]
+        
+        # Esconder indicador de carregamento
+        self.protected_branches_view.set_loading_state(False)
         
         # Configurar as branches na view
         self.protected_branches_view.set_branches(project_branches, self.gitlab_protected_branches)
@@ -202,6 +215,7 @@ class AppController(QObject):
                 {
                     'protected_by_gitlab': [...],  # Branches já protegidas pelo GitLab
                     'protected_by_app': [...]      # Branches protegidas pelo aplicativo
+                    'hide_protected': bool         # Se deve ocultar branches protegidas
                 }
         """
         # Extrair as branches protegidas pelo aplicativo
@@ -214,8 +228,10 @@ class AppController(QObject):
         # Configurar as branches protegidas no controlador
         self.branch_controller.set_protected_branches(all_protected)
         
-        # Configurar se as branches protegidas devem ser ocultadas (usar o padrão: True)
-        self.branch_controller.set_hide_protected_branches(True)
+        # Configurar se as branches protegidas devem ser ocultadas
+        # Usar o valor do checkbox, ou True como padrão se não estiver presente
+        hide_protected = protected_branches_dict.get('hide_protected', True)
+        self.branch_controller.set_hide_protected_branches(hide_protected)
         
         # Agora carregar a tela de branches
         self.branch_controller.set_project(self.current_project_id, self.current_project_name)
