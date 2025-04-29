@@ -10,8 +10,10 @@ Autor: Allan
 """
 
 import sys
+import os
 from PyQt6.QtWidgets import QApplication, QMainWindow
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QDir
+from PyQt6.QtGui import QIcon
 from controllers.app_controller import AppController
 from utils.constants import APP_STYLE
 
@@ -37,6 +39,30 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Gerenciador de Branches GitLab")
         self.setMinimumSize(800, 600)
         
+        # Configurar ícone da aplicação
+        self.setup_application_icon()
+        
+    def setup_application_icon(self):
+        """
+        Configura o ícone da aplicação
+        """
+        icon_path = self.get_resource_path("icon.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+    
+    def get_resource_path(self, relative_path):
+        """
+        Obtém o caminho correto para um recurso, funciona tanto em desenvolvimento
+        quanto após empacotado com PyInstaller
+        """
+        if getattr(sys, 'frozen', False):
+            # Se estiver em um executável PyInstaller
+            base_path = sys._MEIPASS
+        else:
+            # Se estiver em desenvolvimento
+            base_path = os.path.abspath(".")
+            
+        return os.path.join(base_path, "resources", relative_path)
 
 def main():
     """
