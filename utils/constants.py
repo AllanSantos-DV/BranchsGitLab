@@ -2,11 +2,6 @@
 Constantes utilizadas pela aplicação
 """
 
-# Branches protegidas que não podem ser excluídas
-PROTECTED_BRANCHES = [
-    'master', 'main', 'staging', 'homologacao', 'integrations', 'uat', 'develop', 'developer', 'development'
-]
-
 # Estilos da aplicação
 APP_STYLE = """
     QMainWindow, QWidget {

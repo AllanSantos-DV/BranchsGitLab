@@ -136,6 +136,40 @@ class GitLabAPI:
             elapsed = time.time() - start_time
             return False, f"Erro ao obter branches: {str(e)}"
     
+    def get_protected_branches(self, project_id):
+        """
+        Retorna a lista de branches protegidas de um projeto específico
+        
+        Args:
+            project_id (int): ID do projeto no GitLab
+            
+        Returns:
+            tuple: (sucesso, lista de nomes de branches protegidas ou mensagem de erro)
+        """
+        if not self.gl:
+            return False, "Não autenticado no GitLab"
+            
+        start_time = time.time()
+        try:
+            project = self.gl.projects.get(project_id)
+            protected_branches = project.protectedbranches.list(all=True)
+            
+            # Extrair apenas os nomes das branches protegidas
+            protected_branch_names = [branch.name for branch in protected_branches]
+            
+            elapsed = time.time() - start_time
+            
+            return True, protected_branch_names
+        except gitlab.exceptions.GitlabAuthenticationError as e:
+            elapsed = time.time() - start_time
+            return False, f"Erro de autenticação: {str(e)}"
+        except gitlab.exceptions.GitlabConnectionError as e:
+            elapsed = time.time() - start_time
+            return False, f"Erro de conexão com o GitLab: {str(e)}"
+        except Exception as e:
+            elapsed = time.time() - start_time
+            return False, f"Erro ao obter branches protegidas: {str(e)}"
+    
     def delete_branch(self, project_id, branch_name):
         """
         Remove uma branch remota no GitLab

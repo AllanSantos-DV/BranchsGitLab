@@ -3,7 +3,8 @@ Controller para gerenciar as branches do GitLab e repositório local
 """
 from PyQt6.QtWidgets import QMessageBox, QTreeWidgetItem
 from PyQt6.QtCore import QThread, pyqtSignal, QObject
-from utils.constants import PROTECTED_BRANCHES
+from models.gitlab_api import GitLabAPI
+import time
 
 class LoadBranchesThread(QThread):
     """
@@ -86,16 +87,43 @@ class DeleteBranchesThread(QThread):
         self.all_completed.emit()
 
 
+class LoadProtectedBranchesThread(QThread):
+    """
+    Thread para carregar branches protegidas do GitLab sem bloquear a interface
+    """
+    protected_branches_loaded = pyqtSignal(bool, object)  # Sinal emitido com (sucesso, resultado)
+    
+    def __init__(self, gitlab_api, project_id, parent=None):
+        """
+        Inicializa a thread
+        
+        Args:
+            gitlab_api: Instância do GitLabAPI
+            project_id: ID do projeto a ser carregado
+            parent: Objeto pai
+        """
+        super().__init__(parent)
+        self.gitlab_api = gitlab_api
+        self.project_id = project_id
+        
+    def run(self):
+        """Executa a thread para carregar as branches protegidas"""
+        try:
+            success, result = self.gitlab_api.get_protected_branches(self.project_id)
+            self.protected_branches_loaded.emit(success, result)
+        except Exception as e:
+            self.protected_branches_loaded.emit(False, str(e))
+
+
 class BranchController(QObject):
     """
     Controller responsável pelo gerenciamento de branches
     """
-    # Lista de branches protegidas está definida em utils/constants.py
     
     status_updated = pyqtSignal(str)
     protected_branches_updated = pyqtSignal(list)  # Sinal emitido quando a lista de branches protegidas é atualizada
     
-    def __init__(self, view, gitlab_api, git_repo_model, parent_controller=None):
+    def __init__(self, view, gitlab_api: GitLabAPI, git_repo_model, parent_controller=None):
         """
         Inicializa o controller
         
@@ -114,9 +142,8 @@ class BranchController(QObject):
         self.current_project_id = None
         self.current_project_name = None
         self.branches = []
-        
-        # Inicializa a lista de branches protegidas com os valores padrão
-        self.protected_branches = list(PROTECTED_BRANCHES)
+        self.protected_branches = []
+        self.gitlab_protected_branches = []
         
         # Por padrão, esconde branches protegidas da listagem
         self.hide_protected_branches = True
@@ -143,15 +170,15 @@ class BranchController(QObject):
             branch_tree = self.organize_branches_in_tree(self.branches)
             self.view.setup_tree_view(branch_tree, self.is_branch_protected)
     
-    def set_protected_branches(self, branch_names):
+    def set_protected_branches(self, protected_branches):
         """
-        Define a lista de branches protegidas
+        Define a lista de branches protegidas manualmente pelo usuário
         
         Args:
-            branch_names: Lista de nomes de branches protegidas
+            protected_branches (list): Lista de branches protegidas
         """
-        self.protected_branches = branch_names
-        self.protected_branches_updated.emit(branch_names)
+        self.protected_branches = protected_branches
+        self.protected_branches_updated.emit(protected_branches)
         
         # Se já tem branches carregadas, atualizar a visualização
         if self.branches:
@@ -409,4 +436,38 @@ class BranchController(QObject):
                 dir_item = self._create_branch_item(parent_item, key)
                 
                 # Processar recursivamente os itens deste diretório
-                self._populate_tree(dir_item, value, is_protected_func, current_path) 
+                self._populate_tree(dir_item, value, is_protected_func, current_path)
+
+    def get_protected_branches(self, project_id, callback):
+        """
+        Obtém a lista de branches protegidas pelo GitLab
+        
+        Args:
+            project_id (int): ID do projeto
+            callback (function): Função de callback a ser chamada quando as branches protegidas forem carregadas
+        """
+        # Criar e iniciar thread para carregamento seguro
+        self.protected_branches_thread = LoadProtectedBranchesThread(self.gitlab_api, project_id, self)
+        self.protected_branches_thread.protected_branches_loaded.connect(callback)
+        self.protected_branches_thread.start()
+
+    def set_gitlab_protected_branches(self, gitlab_protected_branches):
+        """
+        Define a lista de branches protegidas pelo GitLab
+        
+        Args:
+            gitlab_protected_branches (list): Lista de branches protegidas pelo GitLab
+        """
+        self.gitlab_protected_branches = gitlab_protected_branches
+
+    def is_gitlab_protected(self, branch_name):
+        """
+        Verifica se uma branch está protegida pelo GitLab
+        
+        Args:
+            branch_name (str): Nome da branch
+            
+        Returns:
+            bool: True se a branch estiver protegida pelo GitLab, False caso contrário
+        """
+        return branch_name in self.gitlab_protected_branches 
