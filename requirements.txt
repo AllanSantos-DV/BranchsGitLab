@@ -1,0 +1,4 @@
+python-gitlab==3.15.0
+PyQt6==6.5.2
+GitPython==3.1.32
+keyring==24.2.0 
