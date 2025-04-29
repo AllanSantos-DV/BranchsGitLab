@@ -232,6 +232,20 @@ class BranchesView(QWidget):
                 color: #333333;
                 font-weight: bold;
             }
+            QTreeWidget::branch:has-children:!has-siblings:closed,
+            QTreeWidget::branch:closed:has-children:has-siblings {
+                border-image: none;
+                image: url(resources/closed.png);
+            }
+            QTreeWidget::branch:open:has-children:!has-siblings,
+            QTreeWidget::branch:open:has-children:has-siblings {
+                border-image: none;
+                image: url(resources/open.png);
+            }
+            QTreeWidget::branch {
+                background: transparent;
+                margin: 1px;
+            }
         """)
         
         # Ajustar tamanho das colunas
@@ -570,7 +584,13 @@ class BranchesView(QWidget):
             is_protected_func: Função para verificar se uma branch é protegida
         """
         self.clear_branches()
-        self._populate_tree(self.branches_tree.invisibleRootItem(), branch_tree, is_protected_func)
+        
+        # Use o método do controller para popular a árvore, se existir
+        if hasattr(is_protected_func, '_populate_tree'):
+            is_protected_func._populate_tree(self.branches_tree.invisibleRootItem(), branch_tree, is_protected_func)
+        else:
+            # Caso contrário, use o método interno
+            self._populate_tree(self.branches_tree.invisibleRootItem(), branch_tree, is_protected_func)
         
         # Expandir o primeiro nível
         for i in range(self.branches_tree.topLevelItemCount()):

@@ -8,6 +8,7 @@ from models.git_repo import GitRepo
 from views.login_view import LoginView
 from views.projects_view import ProjectsView
 from views.branches_view import BranchesView
+from views.protected_branches_view import ProtectedBranchesView
 from controllers.login_controller import LoginController
 from controllers.project_controller import ProjectController
 from controllers.branch_controller import BranchController
@@ -48,9 +49,12 @@ class AppController:
         self.login_view = LoginView()
         self.projects_view = ProjectsView()
         self.branches_view = BranchesView()
+        self.protected_branches_view = ProtectedBranchesView()
         
-        # Conectar o sinal para voltar das branches para projetos
+        # Conectar sinais
         self.branches_view.back_to_projects_requested.connect(self.show_projects)
+        self.protected_branches_view.back_to_projects_requested.connect(self.show_projects)
+        self.protected_branches_view.branches_selected.connect(self._on_protected_branches_selected)
         
     def setup_models(self):
         """
@@ -97,6 +101,39 @@ class AppController:
         self.tab_widget.clear()
         self.tab_widget.addTab(self.projects_view, "Projetos")
         
+    def show_protected_branches(self, project_id, project_name):
+        """
+        Exibe a tela de configuração de branches protegidas
+        
+        Args:
+            project_id: ID do projeto no GitLab
+            project_name: Nome do projeto
+        """
+        self.current_project_id = project_id
+        self.current_project_name = project_name
+        self.protected_branches_view.set_project_name(project_name)
+        
+        self.tab_widget.clear()
+        self.tab_widget.addTab(self.protected_branches_view, "Configurar Branches Protegidas")
+        
+    def _on_protected_branches_selected(self, protected_branches, hide_protected):
+        """
+        Callback para quando as branches protegidas são selecionadas
+        
+        Args:
+            protected_branches: Lista de branches selecionadas como protegidas
+            hide_protected: True para esconder branches protegidas da visualização
+        """
+        # Configurar as branches protegidas no controlador
+        self.branch_controller.set_protected_branches(protected_branches)
+        
+        # Configurar se as branches protegidas devem ser ocultadas
+        self.branch_controller.set_hide_protected_branches(hide_protected)
+        
+        # Agora carregar a tela de branches
+        self.branch_controller.set_project(self.current_project_id, self.current_project_name)
+        self.show_branches()
+        
     def show_branches(self):
         """
         Exibe a tela de branches
@@ -126,14 +163,14 @@ class AppController:
         
     def load_branches(self, project_id, project_name):
         """
-        Carrega as branches de um projeto e mostra a tela
+        Carrega a tela de configuração de branches protegidas antes de mostrar as branches
         
         Args:
             project_id: ID do projeto no GitLab
             project_name: Nome do projeto
         """
-        self.branch_controller.set_project(project_id, project_name)
-        self.show_branches()
+        # Mostrar a tela de configuração de branches protegidas
+        self.show_protected_branches(project_id, project_name)
         
     def set_repo_path(self, repo_path):
         """

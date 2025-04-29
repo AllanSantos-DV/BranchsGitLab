@@ -93,6 +93,7 @@ class BranchController(QObject):
     # Lista de branches protegidas está definida em utils/constants.py
     
     status_updated = pyqtSignal(str)
+    protected_branches_updated = pyqtSignal(list)  # Sinal emitido quando a lista de branches protegidas é atualizada
     
     def __init__(self, view, gitlab_api, git_repo_model, parent_controller=None):
         """
@@ -114,6 +115,12 @@ class BranchController(QObject):
         self.current_project_name = None
         self.branches = []
         
+        # Inicializa a lista de branches protegidas com os valores padrão
+        self.protected_branches = list(PROTECTED_BRANCHES)
+        
+        # Por padrão, esconde branches protegidas da listagem
+        self.hide_protected_branches = True
+        
         # Conectar sinais
         self.view.delete_branches_requested.connect(self.delete_branches)
         self.view.select_all_requested.connect(self.view.select_all_branches)
@@ -122,25 +129,60 @@ class BranchController(QObject):
         if parent_controller:
             self.view.back_to_projects_requested.connect(parent_controller.show_projects)
     
-    def is_branch_protected(self, branch_name):
+    def set_hide_protected_branches(self, hide_protected):
         """
-        Verifica se uma branch é protegida baseada em seu nome ou partes do caminho
+        Define se branches protegidas devem ser ocultadas da visualização
+        
+        Args:
+            hide_protected: True para ocultar, False para mostrar
+        """
+        self.hide_protected_branches = hide_protected
+        
+        # Se já tem branches carregadas, atualizar a visualização
+        if self.branches:
+            branch_tree = self.organize_branches_in_tree(self.branches)
+            self.view.setup_tree_view(branch_tree, self.is_branch_protected)
+    
+    def set_protected_branches(self, branch_names):
+        """
+        Define a lista de branches protegidas
+        
+        Args:
+            branch_names: Lista de nomes de branches protegidas
+        """
+        self.protected_branches = branch_names
+        self.protected_branches_updated.emit(branch_names)
+        
+        # Se já tem branches carregadas, atualizar a visualização
+        if self.branches:
+            branch_tree = self.organize_branches_in_tree(self.branches)
+            self.view.setup_tree_view(branch_tree, self.is_branch_protected)
+    
+    def is_branch_protected(self, branch_name, branch_obj=None):
+        """
+        Verifica se uma branch é protegida baseada em seu nome, partes do caminho,
+        ou flags de proteção do GitLab
         
         Args:
             branch_name: Nome da branch a ser verificada
+            branch_obj: Objeto Branch do GitLab (opcional)
             
         Returns:
             bool: True se a branch for protegida, False caso contrário
         """
+        # Verificar se a branch está protegida pelo GitLab
+        if branch_obj and hasattr(branch_obj, 'protected') and branch_obj.protected:
+            return True
+            
         # Verificar se o nome exato da branch está na lista de protegidas
-        if branch_name in PROTECTED_BRANCHES:
+        if branch_name in self.protected_branches:
             return True
             
         # Dividir o nome da branch em partes pelo separador /
         path_parts = branch_name.split('/')
         
         # Verificar se qualquer parte do caminho está na lista de protegidas
-        return any(part in PROTECTED_BRANCHES for part in path_parts)
+        return any(part in self.protected_branches for part in path_parts)
     
     def organize_branches_in_tree(self, branches):
         """
@@ -156,6 +198,15 @@ class BranchController(QObject):
         tree = {}
         
         for branch in branches:
+            # Verificar se a branch está protegida pelo GitLab
+            is_protected_by_gitlab = hasattr(branch, 'protected') and branch.protected
+            
+            # Se a opção de esconder branches protegidas estiver ativada, 
+            # não incluir branches protegidas na árvore
+            if hasattr(self, 'hide_protected_branches') and self.hide_protected_branches:
+                if is_protected_by_gitlab or self.is_branch_protected(branch.name):
+                    continue
+            
             path_parts = branch.name.split('/')
             current_level = tree
             
@@ -324,3 +375,38 @@ class BranchController(QObject):
         self.view.set_loading_state(False)
         QMessageBox.information(self.view, "Concluído", "Operação de remoção finalizada.")
         self.load_branches()  # Recarregar a lista de branches 
+
+    def _populate_tree(self, parent_item, branch_dict, is_protected_func, path=""):
+        """
+        Popula a árvore recursivamente
+        
+        Args:
+            parent_item: Item pai da árvore
+            branch_dict: Dicionário contendo a estrutura de branches
+            is_protected_func: Função para verificar se uma branch é protegida
+            path: Caminho acumulado
+        """
+        # Ordenar as chaves para manter a ordem alfabética
+        sorted_keys = sorted(branch_dict.keys())
+        
+        for key in sorted_keys:
+            # Pular a chave especial __branch
+            if key == "__branch":
+                continue
+                
+            value = branch_dict[key]
+            current_path = path + "/" + key if path else key
+            
+            # Verificar se é uma folha (branch) ou um diretório
+            is_branch = "__branch" in value
+            
+            if is_branch:
+                branch = value["__branch"]
+                is_protected = is_protected_func(branch.name, branch)
+                branch_item = self._create_branch_item(parent_item, key, branch, is_protected)
+            else:
+                # É um diretório, criar item do diretório
+                dir_item = self._create_branch_item(parent_item, key)
+                
+                # Processar recursivamente os itens deste diretório
+                self._populate_tree(dir_item, value, is_protected_func, current_path) 
