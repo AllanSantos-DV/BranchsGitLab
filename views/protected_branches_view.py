@@ -30,7 +30,7 @@ class ProtectedBranchesView(QWidget):
         self.project_branches = []
         self.gitlab_protected_branches = []
         self.init_ui()
-        
+
     def init_ui(self):
         """
         Inicializa a interface do usuário
@@ -259,31 +259,27 @@ class ProtectedBranchesView(QWidget):
         self.select_all_button = QPushButton("Selecionar Todas")
         self.select_all_button.setStyleSheet("""
             QPushButton {
-                background-color: #4A7FC1;
-                color: white;
+                background-color: #AAAAAA;
+                color: #DDDDDD;
                 border-radius: 4px;
-                padding: 6px;
+                padding: 6px 12px;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #2B5797;
-            }
         """)
+        self.select_all_button.setEnabled(False)
         self.select_all_button.clicked.connect(self._select_all)
         
         self.deselect_all_button = QPushButton("Desmarcar Todas")
         self.deselect_all_button.setStyleSheet("""
             QPushButton {
-                background-color: #4A7FC1;
-                color: white;
+                background-color: #AAAAAA;
+                color: #DDDDDD;
                 border-radius: 4px;
-                padding: 6px;
+                padding: 6px 12px;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #2B5797;
-            }
         """)
+        self.deselect_all_button.setEnabled(False)
         self.deselect_all_button.clicked.connect(self._deselect_all)
         
         buttons_layout.addWidget(self.select_all_button)
@@ -293,16 +289,15 @@ class ProtectedBranchesView(QWidget):
         self.confirm_button = QPushButton("Confirmar e Continuar")
         self.confirm_button.setStyleSheet("""
             QPushButton {
-                background-color: #007E33;
-                color: white;
+                background-color: #AAAAAA;
+                color: #DDDDDD;
                 border-radius: 4px;
                 padding: 6px 12px;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #006129;
-            }
         """)
+        self.confirm_button.setEnabled(False)
+        # Inicialmente desabilitado
         self.confirm_button.clicked.connect(self._on_confirm)
         buttons_layout.addWidget(self.confirm_button)
         
@@ -351,7 +346,65 @@ class ProtectedBranchesView(QWidget):
             
     def _on_back_clicked(self):
         """Callback para quando o botão de voltar é clicado"""
+        self._disable_all_buttons()
         self.back_to_projects_requested.emit()
+        
+    def _disable_all_buttons(self):
+        """Desabilita todos os botões de ação"""
+        self._disable_button_style(self.confirm_button)
+        self._disable_button_style(self.select_all_button)
+        self._disable_button_style(self.deselect_all_button)
+        
+    def _enable_action_buttons(self):
+        """Habilita todos os botões de ação"""
+        self._enable_confirm_button_style(self.confirm_button)
+        self._enable_action_button_style(self.select_all_button)
+        self._enable_action_button_style(self.deselect_all_button)
+        
+    def _disable_button_style(self, button):
+        """Define o estilo de um botão desabilitado"""
+        button.setEnabled(False)
+        button.setStyleSheet("""
+            QPushButton {
+                background-color: #AAAAAA;
+                color: #DDDDDD;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+        """)
+        
+    def _enable_action_button_style(self, button):
+        """Define o estilo de um botão de ação habilitado"""
+        button.setEnabled(True)
+        button.setStyleSheet("""
+            QPushButton {
+                background-color: #4A7FC1;
+                color: white;
+                border-radius: 4px;
+                padding: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2B5797;
+            }
+        """)
+        
+    def _enable_confirm_button_style(self, button):
+        """Define o estilo do botão de confirmação habilitado"""
+        button.setEnabled(True)
+        button.setStyleSheet("""
+            QPushButton {
+                background-color: #007E33;
+                color: white;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #006129;
+            }
+        """)
         
     def _on_confirm(self):
         """
@@ -365,10 +418,15 @@ class ProtectedBranchesView(QWidget):
         
         # Adiciona branches selecionadas apenas se existirem checkboxes
         if self.checkboxes:
-            selected_branches['protected_by_app'] = [
-                branch_name for branch_name, checkbox in self.checkboxes.items()
-                if checkbox.isChecked()
-            ]
+            try:
+                selected_branches['protected_by_app'] = [
+                    branch_name for branch_name, checkbox in self.checkboxes.items()
+                    if checkbox.isChecked()
+                ]
+            except RuntimeError:
+                # Se ocorrer erro porque os checkboxes foram destruídos
+                # (durante navegação rápida entre projetos)
+                selected_branches['protected_by_app'] = []
         
         self.protected_branches_selected_signal.emit(selected_branches)
     
@@ -439,9 +497,7 @@ class ProtectedBranchesView(QWidget):
             self.branches_layout.addStretch()
             
             # Habilitar botões de ação já que há branches para selecionar
-            self.confirm_button.setEnabled(True)
-            self.select_all_button.setEnabled(True)
-            self.deselect_all_button.setEnabled(True)
+            self._enable_action_buttons()
         else:
             # Caso não haja outras branches além das protegidas pelo GitLab
             no_branches_label = QLabel("Nenhuma branch adicional encontrada")
@@ -450,12 +506,10 @@ class ProtectedBranchesView(QWidget):
             self.branches_layout.addStretch()
             
             # Desabilitar botões de ação já que não há branches para selecionar
-            self.confirm_button.setEnabled(True)  # Mantém habilitado para poder continuar
-            self.select_all_button.setEnabled(False)
-            self.deselect_all_button.setEnabled(False)
+            self._disable_all_buttons()
             
             # Adiciona aviso sobre não haver branches para selecionar
-            info_label = QLabel("Não há branches adicionais para proteger. Clique em 'Confirmar e Continuar' para prosseguir.")
+            info_label = QLabel("Não há branches adicionais para proteger.")
             info_label.setStyleSheet("color: #B71C1C; font-weight: bold;")
             info_label.setWordWrap(True)
             self.branches_layout.addWidget(info_label)
@@ -489,12 +543,24 @@ class ProtectedBranchesView(QWidget):
         
         # Adiciona branches selecionadas apenas se existirem checkboxes
         if self.checkboxes:
-            protected_by_app = [
-                branch_name for branch_name, checkbox in self.checkboxes.items()
-                if checkbox.isChecked()
-            ]
+            try:
+                protected_by_app = [
+                    branch_name for branch_name, checkbox in self.checkboxes.items()
+                    if checkbox.isChecked()
+                ]
+            except RuntimeError:
+                # Se ocorrer erro porque os checkboxes foram destruídos
+                # (durante navegação rápida entre projetos)
+                protected_by_app = []
         
         return {
             'protected_by_gitlab': protected_by_gitlab,
             'protected_by_app': protected_by_app
-        } 
+        }
+
+    def disable_buttons_externally(self):
+        """
+        Método público para desabilitar os botões quando solicitado externamente
+        por outras views
+        """
+        self._disable_all_buttons() 

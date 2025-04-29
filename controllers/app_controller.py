@@ -66,6 +66,11 @@ class AppController(QObject):
         self.protected_branches_view.branches_selected.connect(self._on_protected_branches_selected)
         self.protected_branches_view.protected_branches_selected_signal.connect(self._on_protected_branches_selected_dict)
         
+        # Conectar sinal para desabilitar botões da protected_branches_view quando voltar da branches_view
+        self.branches_view.disable_protected_branches_buttons_requested.connect(
+            self.protected_branches_view.disable_buttons_externally
+        )
+        
     def setup_models(self):
         """
         Configura os models da aplicação

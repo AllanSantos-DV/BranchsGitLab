@@ -37,7 +37,7 @@ class MainWindow(QMainWindow):
         Configura a interface da janela principal
         """
         self.setWindowTitle("Gerenciador de Branches GitLab")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(1000, 800)
         
         # Configurar ícone da aplicação
         self.setup_application_icon()

@@ -52,6 +52,51 @@ def check_icon_file():
         return False
     return True
 
+def check_resources():
+    """Verifica se os arquivos de recursos necessários existem."""
+    required_resources = [
+        'resources/open.png', 
+        'resources/closed.png'
+    ]
+    
+    missing_resources = []
+    for resource in required_resources:
+        if not os.path.exists(resource):
+            missing_resources.append(resource)
+    
+    if missing_resources:
+        print("AVISO: Os seguintes recursos estão faltando:")
+        for resource in missing_resources:
+            print(f" - {resource}")
+        print("Estes recursos são necessários para o funcionamento correto da aplicação.")
+        return False
+    
+    print("Todos os recursos necessários foram encontrados.")
+    return True
+
+def list_resources():
+    """Lista detalhadamente todos os recursos na pasta resources."""
+    if not os.path.exists("resources"):
+        print("ERRO: A pasta 'resources' não foi encontrada!")
+        return False
+    
+    print("\n=== Verificação detalhada de recursos ===")
+    resources_path = os.path.abspath("resources")
+    print(f"Pasta de recursos: {resources_path}")
+    
+    files = os.listdir(resources_path)
+    if not files:
+        print("AVISO: A pasta 'resources' está vazia!")
+        return False
+    
+    print(f"Total de arquivos encontrados: {len(files)}")
+    for file in files:
+        file_path = os.path.join(resources_path, file)
+        file_size = os.path.getsize(file_path) / 1024  # Tamanho em KB
+        print(f" - {file} ({file_size:.2f} KB) - {os.path.abspath(file_path)}")
+    
+    return True
+
 def build_executable():
     """Constrói o executável usando PyInstaller."""
     app_name = "GerenciadorBranchesGitLab"
@@ -65,6 +110,23 @@ def build_executable():
     # Verificar se o ícone existe
     has_icon = check_icon_file()
     
+    # Verificar recursos necessários
+    check_resources()
+    
+    # Listar recursos detalhadamente
+    list_resources()
+    
+    # Obter caminho absoluto para resources
+    resources_path = os.path.abspath("resources")
+    
+    # Formato do separador para --add-data
+    # No Windows: usar ponto e vírgula (;)
+    # No Linux/Mac: usar dois pontos (:)
+    separator = ";" if sys.platform.startswith("win") else ":"
+    add_data_arg = f"{resources_path}{separator}resources"
+    
+    print(f"\nArgumento --add-data que será usado: {add_data_arg}")
+    
     # Definir os argumentos do PyInstaller
     pyinstaller_args = [
         "--name=" + app_name,
@@ -72,12 +134,13 @@ def build_executable():
         "--windowed",              # Não mostrar console para aplicações GUI
         "--clean",                 # Limpar dados de compilação anteriores
         "--noconfirm",             # Não perguntar sobre sobrescrever
-        "--add-data=resources:resources",  # Incluir recursos
+        f"--add-data={add_data_arg}",  # Incluir recursos
     ]
     
     # Adicionar o ícone apenas se existir
     if has_icon:
-        pyinstaller_args.append("--icon=resources/icon.ico")
+        icon_path = os.path.abspath("resources/icon.ico")
+        pyinstaller_args.append(f"--icon={icon_path}")
     
     # Adicionar imports ocultos e o arquivo principal
     pyinstaller_args.extend([
@@ -90,7 +153,7 @@ def build_executable():
     # Construir o comando
     cmd = [sys.executable, "-m", "PyInstaller"] + pyinstaller_args
     
-    print("Iniciando o build do executável...")
+    print("\nIniciando o build do executável...")
     print(f"Comando: {' '.join(cmd)}")
     
     try:

@@ -4,9 +4,11 @@ View para a tela de gerenciamento de branches
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                            QPushButton, QCheckBox, QProgressBar, QLineEdit,
                            QFrame, QTreeWidget, QTreeWidgetItem, QMenu,
-                           QHeaderView, QSizePolicy, QAbstractItemView, QMessageBox, QSplitter)
-from PyQt6.QtCore import pyqtSignal, Qt, QSize
-from PyQt6.QtGui import QColor, QIcon, QFont, QBrush, QAction, QCursor
+                           QHeaderView, QAbstractItemView)
+from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtGui import QColor, QIcon, QFont, QBrush, QAction
+import sys
+import os
 
 class BranchesView(QWidget):
     """
@@ -18,6 +20,7 @@ class BranchesView(QWidget):
     select_all_requested = pyqtSignal()
     deselect_all_requested = pyqtSignal()
     back_to_projects_requested = pyqtSignal()  # Novo sinal para voltar
+    disable_protected_branches_buttons_requested = pyqtSignal()  # Novo sinal para desabilitar botões em protected_branches_view
     
     def __init__(self, parent=None):
         """
@@ -28,6 +31,20 @@ class BranchesView(QWidget):
         """
         super().__init__(parent)
         self.init_ui()
+        
+    def get_resource_path(self, relative_path):
+        """
+        Obtém o caminho correto para um recurso, funciona tanto em desenvolvimento
+        quanto após empacotado com PyInstaller
+        """
+        if getattr(sys, 'frozen', False):
+            # Se estiver em um executável PyInstaller
+            base_path = sys._MEIPASS
+        else:
+            # Se estiver em desenvolvimento
+            base_path = os.path.abspath(".")
+            
+        return os.path.join(base_path, "resources", relative_path)
         
     def init_ui(self):
         """
@@ -205,6 +222,18 @@ class BranchesView(QWidget):
         self.branches_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.branches_tree.customContextMenuRequested.connect(self._show_context_menu)
         self.branches_tree.setFrameShape(QFrame.Shape.NoFrame)
+        
+        # Definir ícones programaticamente
+        closed_icon_path = self.get_resource_path("closed.png")
+        open_icon_path = self.get_resource_path("open.png")
+        
+        if os.path.exists(closed_icon_path) and os.path.exists(open_icon_path):
+            self.branches_tree.setProperty("closed_icon", closed_icon_path)
+            self.branches_tree.setProperty("open_icon", open_icon_path)
+            print(f"Ícones carregados: {closed_icon_path}, {open_icon_path}")
+        else:
+            print(f"AVISO: Ícones não encontrados: {closed_icon_path}, {open_icon_path}")
+        
         self.branches_tree.setStyleSheet("""
             QTreeWidget {
                 background-color: white;
@@ -231,16 +260,6 @@ class BranchesView(QWidget):
                 border: 1px solid #CCCCCC;
                 color: #333333;
                 font-weight: bold;
-            }
-            QTreeWidget::branch:has-children:!has-siblings:closed,
-            QTreeWidget::branch:closed:has-children:has-siblings {
-                border-image: none;
-                image: url(resources/closed.png);
-            }
-            QTreeWidget::branch:open:has-children:!has-siblings,
-            QTreeWidget::branch:open:has-children:has-siblings {
-                border-image: none;
-                image: url(resources/open.png);
             }
             QTreeWidget::branch {
                 background: transparent;
@@ -437,7 +456,41 @@ class BranchesView(QWidget):
         
     def _on_back_clicked(self):
         """Callback para quando o botão de voltar é clicado"""
+        self._disable_all_buttons()
+        self.disable_protected_branches_buttons_requested.emit()  # Emite sinal para desabilitar botões em protected_branches_view
         self.back_to_projects_requested.emit()
+    
+    def _disable_all_buttons(self):
+        """Desabilita todos os botões de ação"""
+        self._disable_button_style(self.select_all_button)
+        self._disable_button_style(self.deselect_all_button)
+        self._disable_delete_button_style(self.delete_button)
+        
+    def _disable_button_style(self, button):
+        """Define o estilo de um botão desabilitado"""
+        button.setEnabled(False)
+        button.setStyleSheet("""
+            QPushButton {
+                background-color: #AAAAAA;
+                color: #DDDDDD;
+                border-radius: 4px;
+                padding: 6px;
+                font-weight: bold;
+            }
+        """)
+        
+    def _disable_delete_button_style(self, button):
+        """Define o estilo do botão de deletar desabilitado"""
+        button.setEnabled(False)
+        button.setStyleSheet("""
+            QPushButton {
+                background-color: #AAAAAA;
+                color: #DDDDDD;
+                border-radius: 4px;
+                padding: 6px;
+                font-weight: bold;
+            }
+        """)
     
     def _on_filter_changed(self, text):
         """Callback para quando o texto do filtro muda"""
@@ -466,6 +519,9 @@ class BranchesView(QWidget):
             
     def _on_select_all_clicked(self):
         """Callback para quando o botão de selecionar todas é clicado"""
+        if not self.select_all_button.isEnabled():
+            return
+            
         self.select_all_requested.emit()
         
     def _on_deselect_all_clicked(self):
@@ -523,6 +579,11 @@ class BranchesView(QWidget):
         """Limpa a árvore de branches"""
         self.branches_tree.clear()
         self.filter_input.clear()
+        
+        # Desabilitar botões quando a lista é limpa
+        self.select_all_button.setEnabled(False)
+        self.deselect_all_button.setEnabled(False)
+        self.delete_button.setEnabled(False)
     
     def _create_branch_item(self, parent, name, branch=None, is_protected=False):
         """
@@ -595,7 +656,13 @@ class BranchesView(QWidget):
         # Expandir o primeiro nível
         for i in range(self.branches_tree.topLevelItemCount()):
             self.branches_tree.topLevelItem(i).setExpanded(True)
-            
+        
+        # Aplicar ícones
+        self._set_tree_icons()
+        
+        # Verificar se existem branches não protegidas
+        self._update_buttons_state()
+    
     def _populate_tree(self, parent_item, branch_dict, is_protected_func, path=""):
         """
         Popula a árvore recursivamente
@@ -630,7 +697,64 @@ class BranchesView(QWidget):
                 
                 # Processar recursivamente os itens deste diretório
                 self._populate_tree(dir_item, value, is_protected_func, current_path)
-                
+    
+    def _set_tree_icons(self):
+        """Define os ícones de expandir/recolher na árvore"""
+        closed_icon_path = self.get_resource_path("closed.png")
+        open_icon_path = self.get_resource_path("open.png")
+        
+        if os.path.exists(closed_icon_path) and os.path.exists(open_icon_path):
+            self.closed_icon = QIcon(closed_icon_path)
+            self.open_icon = QIcon(open_icon_path)
+            
+            # Remover conexões anteriores para evitar conexões duplicadas
+            try:
+                self.branches_tree.itemExpanded.disconnect()
+                self.branches_tree.itemCollapsed.disconnect()
+            except:
+                pass  # Ignora se não houver conexões
+            
+            # Conectar sinais para troca de ícones
+            self.branches_tree.itemExpanded.connect(self._handle_item_expanded)
+            self.branches_tree.itemCollapsed.connect(self._handle_item_collapsed)
+            
+            # Aplicar ícones iniciais
+            self._apply_icons_to_all_items()
+        else:
+            print(f"AVISO: Ícones não encontrados: {closed_icon_path}, {open_icon_path}")
+    
+    def _handle_item_expanded(self, item):
+        """Manipula o evento de item expandido"""
+        if item.childCount() > 0 and hasattr(self, 'open_icon'):
+            item.setIcon(0, self.open_icon)
+    
+    def _handle_item_collapsed(self, item):
+        """Manipula o evento de item recolhido"""
+        if item.childCount() > 0 and hasattr(self, 'closed_icon'):
+            item.setIcon(0, self.closed_icon)
+    
+    def _apply_icons_to_all_items(self):
+        """Aplica ícones a todos os itens na árvore"""
+        if not hasattr(self, 'closed_icon') or not hasattr(self, 'open_icon'):
+            return
+            
+        for i in range(self.branches_tree.topLevelItemCount()):
+            self._apply_icons_recursively(self.branches_tree.topLevelItem(i))
+    
+    def _apply_icons_recursively(self, item):
+        """Aplica ícones a um item e seus filhos recursivamente"""
+        # Aplicar ícones apenas se o item tiver filhos
+        if item.childCount() > 0:
+            # Definir o ícone conforme o estado de expansão
+            if item.isExpanded():
+                item.setIcon(0, self.open_icon)
+            else:
+                item.setIcon(0, self.closed_icon)
+        
+        # Aplicar aos filhos
+        for i in range(item.childCount()):
+            self._apply_icons_recursively(item.child(i))
+
     def get_selected_branches(self):
         """
         Retorna a lista de branches selecionadas
@@ -682,3 +806,117 @@ class BranchesView(QWidget):
     def deselect_all_branches(self):
         """Desmarca todas as branches"""
         self.branches_tree.clearSelection() 
+    
+    def _count_deletable_branches(self):
+        """
+        Conta o número de branches que podem ser deletadas (não protegidas)
+        
+        Returns:
+            int: Número de branches não protegidas
+        """
+        deletable_count = 0
+        
+        # Função recursiva para contar branches não protegidas
+        def count_branches(parent):
+            nonlocal deletable_count
+            for i in range(parent.childCount()):
+                item = parent.child(i)
+                
+                # Verificar os dados do item
+                data = item.data(0, Qt.ItemDataRole.UserRole)
+                if data and data.get('is_leaf', False) and not data.get('is_protected', False):
+                    deletable_count += 1
+                
+                # Verificar filhos recursivamente
+                count_branches(item)
+        
+        # Iniciar a contagem a partir da raiz invisível
+        count_branches(self.branches_tree.invisibleRootItem())
+        
+        return deletable_count
+    
+    def _update_buttons_state(self):
+        """
+        Atualiza o estado dos botões de acordo com a presença de branches deletáveis
+        """
+        has_deletable_branches = self._count_deletable_branches() > 0
+        
+        self.select_all_button.setEnabled(has_deletable_branches)
+        self.delete_button.setEnabled(has_deletable_branches)
+        
+        if not has_deletable_branches:
+            self.select_all_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #AAAAAA;
+                    color: #DDDDDD;
+                    border-radius: 4px;
+                    padding: 6px;
+                    font-weight: bold;
+                }
+            """)
+            self.delete_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #AAAAAA;
+                    color: #DDDDDD;
+                    border-radius: 4px;
+                    padding: 6px;
+                    font-weight: bold;
+                }
+            """)
+        else:
+            self.select_all_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4A7FC1;
+                    color: white;
+                    border-radius: 4px;
+                    padding: 6px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #2B5797;
+                }
+            """)
+            self.delete_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #C42B1C;
+                    color: white;
+                    border-radius: 4px;
+                    padding: 6px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #951500;
+                }
+            """)
+        
+    def _apply_icons_to_all_items(self):
+        """Aplica ícones a todos os itens na árvore"""
+        if not hasattr(self, 'closed_icon') or not hasattr(self, 'open_icon'):
+            return
+            
+        for i in range(self.branches_tree.topLevelItemCount()):
+            self._apply_icons_recursively(self.branches_tree.topLevelItem(i))
+    
+    def _apply_icons_recursively(self, item):
+        """Aplica ícones a um item e seus filhos recursivamente"""
+        # Aplicar ícones apenas se o item tiver filhos
+        if item.childCount() > 0:
+            # Definir o ícone conforme o estado de expansão
+            if item.isExpanded():
+                item.setIcon(0, self.open_icon)
+            else:
+                item.setIcon(0, self.closed_icon)
+        
+        # Aplicar aos filhos
+        for i in range(item.childCount()):
+            self._apply_icons_recursively(item.child(i))
+
+    def clear_branches(self):
+        """Limpa a árvore de branches"""
+        self.branches_tree.clear()
+        self.filter_input.clear()
+        
+        # Desabilitar botões quando a lista é limpa
+        self.select_all_button.setEnabled(False)
+        self.deselect_all_button.setEnabled(False)
+        self.delete_button.setEnabled(False) 
