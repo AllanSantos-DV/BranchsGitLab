@@ -49,6 +49,15 @@ class GitRepo:
         """
         return self.repo is not None
         
+    def is_initialized(self):
+        """
+        Verifica se o repositório foi inicializado corretamente
+        
+        Returns:
+            bool: True se o repositório foi inicializado, False caso contrário
+        """
+        return self.repo is not None
+        
     def get_branches(self):
         """
         Retorna a lista de branches locais

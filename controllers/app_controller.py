@@ -132,7 +132,7 @@ class AppController:
             project_id: ID do projeto no GitLab
             project_name: Nome do projeto
         """
-        self.branch_controller.load_branches(project_id, project_name)
+        self.branch_controller.set_project(project_id, project_name)
         self.show_branches()
         
     def set_repo_path(self, repo_path):

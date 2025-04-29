@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                            QLineEdit, QScrollArea, QFrame, QGridLayout, QSizePolicy,
                            QToolButton, QSpacerItem)
 from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtGui import QIcon, QFont
+from PyQt6.QtGui import QIcon, QFont, QColor, QPalette, QLinearGradient, QBrush
 
 class ProjectCard(QFrame):
     """Card para exibição de um projeto"""
@@ -27,23 +27,82 @@ class ProjectCard(QFrame):
         self.setFrameShadow(QFrame.Shadow.Raised)
         self.setStyleSheet("""
             ProjectCard {
-                background-color: #F5F5F5;
+                background-color: #F8F8F8;
                 border: 1px solid #CCCCCC;
-                border-radius: 8px;
+                border-radius: 10px;
                 padding: 10px;
-                margin: 5px;
+                margin: 8px;
             }
             ProjectCard:hover {
-                background-color: #E0E0E0;
+                background-color: #EFF5FB;
+                border: 1px solid #A5C7FE;
             }
-            QLabel {
-                color: #333333;
+        """)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setMinimumHeight(150)
+        self.setMaximumHeight(180)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
+        
+        # Nome do projeto (estilizado)
+        name_frame = QFrame()
+        name_frame.setStyleSheet("""
+            QFrame {
+                background-color: #2B5797;
+                border-radius: 5px;
+                padding: 5px;
             }
+        """)
+        name_layout = QVBoxLayout(name_frame)
+        name_layout.setContentsMargins(10, 12, 10, 12)
+        
+        name_label = QLabel(self.project_name)
+        font = QFont()
+        font.setPointSize(12)
+        font.setBold(True)
+        name_label.setFont(font)
+        name_label.setStyleSheet("color: white;")
+        name_label.setWordWrap(True)
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_layout.addWidget(name_label)
+        
+        layout.addWidget(name_frame)
+        
+        # Caminho do projeto
+        path_frame = QFrame()
+        path_frame.setStyleSheet("""
+            QFrame {
+                background-color: #F0F0F0;
+                border-radius: 4px;
+                padding: 2px;
+            }
+        """)
+        path_layout = QVBoxLayout(path_frame)
+        path_layout.setContentsMargins(10, 5, 10, 5)
+        
+        path_label = QLabel(self.project_path)
+        path_label.setStyleSheet("color: #555555;")
+        path_label.setWordWrap(True)
+        path_font = QFont()
+        path_font.setPointSize(9)
+        path_label.setFont(path_font)
+        path_layout.addWidget(path_label)
+        
+        layout.addWidget(path_frame)
+        
+        # Botão de visualizar branches
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        view_button = QPushButton("Ver Branches")
+        view_button.setStyleSheet("""
             QPushButton {
                 background-color: #2B5797;
                 color: white;
                 border-radius: 4px;
-                padding: 5px;
+                padding: 6px 12px;
                 font-weight: bold;
                 min-height: 25px;
             }
@@ -51,39 +110,7 @@ class ProjectCard(QFrame):
                 background-color: #1D3C6E;
             }
         """)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumHeight(120)
-        self.setMaximumHeight(150)
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
-        
-        # Nome do projeto
-        name_label = QLabel(self.project_name)
-        font = QFont()
-        font.setPointSize(11)
-        font.setBold(True)
-        name_label.setFont(font)
-        name_label.setStyleSheet("color: #333333;")
-        name_label.setWordWrap(True)
-        layout.addWidget(name_label)
-        
-        # Caminho do projeto
-        path_label = QLabel(self.project_path)
-        path_label.setStyleSheet("color: #666666; font-size: 10pt;")
-        path_label.setWordWrap(True)
-        path_font = QFont()
-        path_font.setPointSize(9)
-        path_label.setFont(path_font)
-        layout.addWidget(path_label)
-        
-        # Botão de visualizar branches
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        
-        view_button = QPushButton("Ver Branches")
-        view_button.setMaximumWidth(120)
+        view_button.setFixedWidth(120)
         view_button.clicked.connect(self.on_clicked)
         button_layout.addWidget(view_button)
         
@@ -129,25 +156,58 @@ class ProjectsView(QWidget):
         layout.setSpacing(10)
         
         # Título e botões
-        header_layout = QHBoxLayout()
+        header_frame = QFrame()
+        header_frame.setStyleSheet("""
+            QFrame {
+                background-color: #F0F5FF;
+                border: 1px solid #D0E0FF;
+                border-radius: 6px;
+            }
+        """)
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(15, 10, 15, 10)
         
         title_label = QLabel("Projetos Disponíveis")
-        title_label.setProperty("title", "true")
+        title_font = QFont()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        title_label.setStyleSheet("color: #2B5797;")
         header_layout.addWidget(title_label)
         
         spacer = QSpacerItem(20, 10, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         header_layout.addItem(spacer)
         
         self.repo_button = QPushButton("Selecionar Repositório Local")
+        self.repo_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4A7FC1;
+                color: white;
+                border-radius: 4px;
+                padding: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2B5797;
+            }
+        """)
         self.repo_button.setFixedWidth(200)
         header_layout.addWidget(self.repo_button)
         
-        header_widget = QWidget()
-        header_widget.setLayout(header_layout)
-        layout.addWidget(header_widget)
+        layout.addWidget(header_frame)
         
         # Status de carregamento
-        self.status_layout = QHBoxLayout()
+        status_frame = QFrame()
+        status_frame.setStyleSheet("""
+            QFrame {
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+                background-color: #FAFAFA;
+            }
+        """)
+        self.status_layout = QHBoxLayout(status_frame)
+        self.status_layout.setContentsMargins(10, 5, 10, 5)
+        
         self.status_label = QLabel("")
         self.status_label.setStyleSheet("color: #2B5797; font-weight: bold;")
         self.progress_bar = QProgressBar()
@@ -157,24 +217,43 @@ class ProjectsView(QWidget):
         self.status_layout.addWidget(self.status_label)
         self.status_layout.addWidget(self.progress_bar)
         
-        status_widget = QWidget()
-        status_widget.setLayout(self.status_layout)
-        layout.addWidget(status_widget)
+        layout.addWidget(status_frame)
         
         # Campo de busca
-        search_layout = QHBoxLayout()
+        search_frame = QFrame()
+        search_frame.setStyleSheet("""
+            QFrame {
+                background-color: #F7F7F7;
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
+            }
+        """)
+        search_layout = QHBoxLayout(search_frame)
+        search_layout.setContentsMargins(10, 5, 10, 5)
+        
         search_label = QLabel("Buscar:")
+        search_label.setStyleSheet("font-weight: bold;")
         search_label.setFixedWidth(60)
+        
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Filtrar por nome de projeto")
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #CCCCCC;
+                border-radius: 4px;
+                padding: 8px;
+                background-color: white;
+            }
+            QLineEdit:focus {
+                border: 1px solid #2B5797;
+            }
+        """)
         self.search_input.textChanged.connect(self.filter_projects)
         
         search_layout.addWidget(search_label)
         search_layout.addWidget(self.search_input)
         
-        search_widget = QWidget()
-        search_widget.setLayout(search_layout)
-        layout.addWidget(search_widget)
+        layout.addWidget(search_frame)
         
         # Grid de cards de projetos
         scroll_content = QWidget()
@@ -191,16 +270,58 @@ class ProjectsView(QWidget):
         layout.addWidget(self.scroll_area)
         
         # Paginação
-        pagination_layout = QHBoxLayout()
+        pagination_frame = QFrame()
+        pagination_frame.setStyleSheet("""
+            QFrame {
+                background-color: #F0F5FF;
+                border: 1px solid #D0E0FF;
+                border-radius: 6px;
+            }
+        """)
+        pagination_layout = QHBoxLayout(pagination_frame)
+        pagination_layout.setContentsMargins(15, 10, 15, 10)
         
         self.prev_button = QPushButton("← Anterior")
+        self.prev_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4A7FC1;
+                color: white;
+                border-radius: 4px;
+                padding: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2B5797;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #888888;
+            }
+        """)
         self.prev_button.setFixedWidth(120)
         self.prev_button.clicked.connect(self.prev_page)
         
         self.page_label = QLabel("Página 1")
+        self.page_label.setStyleSheet("font-weight: bold; color: #2B5797;")
         self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.next_button = QPushButton("Próxima →")
+        self.next_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4A7FC1;
+                color: white;
+                border-radius: 4px;
+                padding: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2B5797;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #888888;
+            }
+        """)
         self.next_button.setFixedWidth(120)
         self.next_button.clicked.connect(self.next_page)
         
@@ -210,9 +331,7 @@ class ProjectsView(QWidget):
         pagination_layout.addStretch()
         pagination_layout.addWidget(self.next_button)
         
-        pagination_widget = QWidget()
-        pagination_widget.setLayout(pagination_layout)
-        layout.addWidget(pagination_widget)
+        layout.addWidget(pagination_frame)
         
         # Conectar sinais
         self.repo_button.clicked.connect(self._on_repo_clicked)
@@ -240,8 +359,8 @@ class ProjectsView(QWidget):
         self.progress_bar.setVisible(is_loading)
         self.status_label.setText(message if is_loading else "")
         self.search_input.setEnabled(not is_loading)
-        self.prev_button.setEnabled(not is_loading)
-        self.next_button.setEnabled(not is_loading)
+        self.prev_button.setEnabled(not is_loading and self.current_page > 0)
+        self.next_button.setEnabled(not is_loading and self.has_next_page())
         self.repo_button.setEnabled(not is_loading)
         
     def clear_projects(self):
@@ -296,6 +415,11 @@ class ProjectsView(QWidget):
         self.update_pagination()
         self.display_current_page()
         
+    def has_next_page(self):
+        """Verifica se existe uma próxima página"""
+        total_pages = (len(self.filtered_projects) + self.projects_per_page - 1) // self.projects_per_page
+        return self.current_page < total_pages - 1
+        
     def update_pagination(self):
         """Atualiza o estado dos controles de paginação"""
         total_projects = len(self.filtered_projects)
@@ -311,7 +435,7 @@ class ProjectsView(QWidget):
         
         # Habilitar/desabilitar botões de paginação
         self.prev_button.setEnabled(self.current_page > 0)
-        self.next_button.setEnabled(self.current_page < total_pages - 1)
+        self.next_button.setEnabled(self.has_next_page())
         
     def display_current_page(self):
         """Exibe os projetos da página atual"""
@@ -327,10 +451,22 @@ class ProjectsView(QWidget):
         
         # Se não houver projetos para exibir
         if start_idx >= len(self.filtered_projects):
+            empty_frame = QFrame()
+            empty_frame.setStyleSheet("""
+                QFrame {
+                    background-color: #F7F7F7;
+                    border: 1px solid #E0E0E0;
+                    border-radius: 8px;
+                }
+            """)
+            empty_layout = QVBoxLayout(empty_frame)
+            
             empty_label = QLabel("Nenhum projeto encontrado.")
             empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty_label.setStyleSheet("color: #666666; font-size: 14px;")
-            self.projects_grid.addWidget(empty_label, 0, 0, 1, 2)
+            empty_label.setStyleSheet("color: #666666; font-size: 14px; font-weight: bold;")
+            empty_layout.addWidget(empty_label)
+            
+            self.projects_grid.addWidget(empty_frame, 0, 0, 1, 2)
             return
             
         # Adicionar projetos à grid
@@ -359,8 +495,7 @@ class ProjectsView(QWidget):
         
     def next_page(self):
         """Avança para a próxima página"""
-        total_pages = (len(self.filtered_projects) + self.projects_per_page - 1) // self.projects_per_page
-        if self.current_page < total_pages - 1:
+        if self.has_next_page():
             self.current_page += 1
             self.update_pagination()
             self.display_current_page()

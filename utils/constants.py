@@ -3,7 +3,9 @@ Constantes utilizadas pela aplicação
 """
 
 # Branches protegidas que não podem ser excluídas
-PROTECTED_BRANCHES = ['master', 'staging', 'integrations', 'uat', 'developer']
+PROTECTED_BRANCHES = [
+    'master', 'main', 'staging', 'homologacao', 'integrations', 'uat', 'develop', 'developer', 'development'
+]
 
 # Estilos da aplicação
 APP_STYLE = """
@@ -42,6 +44,10 @@ APP_STYLE = """
     }
     QPushButton[destructive="true"]:hover {
         background-color: #951500;
+    }
+    QPushButton:disabled {
+        background-color: #CCCCCC;
+        color: #888888;
     }
     QLineEdit {
         border: 1px solid #CCCCCC;
@@ -108,5 +114,8 @@ APP_STYLE = """
     QProgressBar::chunk {
         background-color: #2B5797;
         width: 10px;
+    }
+    QFrame {
+        background-color: #FFFFFF;
     }
 """ 
