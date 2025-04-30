@@ -182,6 +182,67 @@ class BranchesView(QWidget):
         filter_layout = QHBoxLayout(filter_frame)
         filter_layout.setContentsMargins(10, 8, 10, 8)
         
+        # Adicionar botões de ícone para expandir/recolher
+        # Verificar se os ícones foram carregados no método _load_icons
+        expand_icon_path = self.get_resource_path("expand.png")
+        minimize_icon_path = self.get_resource_path("minimize.png")
+        
+        if os.path.exists(expand_icon_path):
+            self.expand_icon = QIcon(expand_icon_path)
+        else:
+            self.expand_icon = QIcon()
+            print(f"AVISO: Ícone de expandir não encontrado: {expand_icon_path}")
+            
+        if os.path.exists(minimize_icon_path):
+            self.minimize_icon = QIcon(minimize_icon_path)
+        else:
+            self.minimize_icon = QIcon()
+            print(f"AVISO: Ícone de minimizar não encontrado: {minimize_icon_path}")
+            
+        # Botão para expandir tudo
+        self.expand_all_button = QPushButton()
+        self.expand_all_button.setIcon(self.expand_icon)
+        self.expand_all_button.setToolTip("Expandir Tudo")
+        self.expand_all_button.setFixedSize(32, 32)
+        self.expand_all_button.setStyleSheet("""
+            QPushButton {
+                background-color: #F0F5FF;
+                border: 1px solid #D0E0FF;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #D0E0FF;
+            }
+            QPushButton:pressed {
+                background-color: #B0D0FF;
+            }
+        """)
+        self.expand_all_button.clicked.connect(self._expand_all)
+        
+        # Botão para recolher tudo
+        self.collapse_all_button = QPushButton()
+        self.collapse_all_button.setIcon(self.minimize_icon)
+        self.collapse_all_button.setToolTip("Recolher Tudo")
+        self.collapse_all_button.setFixedSize(32, 32)
+        self.collapse_all_button.setStyleSheet("""
+            QPushButton {
+                background-color: #F0F5FF;
+                border: 1px solid #D0E0FF;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #D0E0FF;
+            }
+            QPushButton:pressed {
+                background-color: #B0D0FF;
+            }
+        """)
+        self.collapse_all_button.clicked.connect(self._collapse_all)
+        
+        # Organizar o layout: primeiro os ícones, depois o filtro
+        filter_layout.addWidget(self.expand_all_button)
+        filter_layout.addWidget(self.collapse_all_button)
+        
         filter_label = QLabel("Filtrar:")
         filter_label.setStyleSheet("font-weight: bold;")
         filter_label.setFixedWidth(60)
@@ -253,39 +314,6 @@ class BranchesView(QWidget):
         buttons_layout = QHBoxLayout(buttons_frame)
         buttons_layout.setContentsMargins(10, 8, 10, 8)
         
-        # Botões de expandir/recolher (agora adicionados primeiro)
-        self.expand_all_button = QPushButton("Expandir Tudo")
-        self.expand_all_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4A7FC1;
-                color: white;
-                border-radius: 4px;
-                padding: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2B5797;
-            }
-        """)
-        self.expand_all_button.setFixedWidth(150)
-        self.expand_all_button.clicked.connect(self._expand_all)
-        
-        self.collapse_all_button = QPushButton("Recolher Tudo")
-        self.collapse_all_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4A7FC1;
-                color: white;
-                border-radius: 4px;
-                padding: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2B5797;
-            }
-        """)
-        self.collapse_all_button.setFixedWidth(150)
-        self.collapse_all_button.clicked.connect(self._collapse_all)
-        
         self.select_all_button = QPushButton("Selecionar Todas")
         self.select_all_button.setStyleSheet("""
             QPushButton {
@@ -331,9 +359,7 @@ class BranchesView(QWidget):
         """)
         self.delete_button.setFixedWidth(180)
         
-        # Adicionar na ordem: expandir, recolher, selecionar, desmarcar
-        buttons_layout.addWidget(self.expand_all_button)
-        buttons_layout.addWidget(self.collapse_all_button)
+        # Adicionar na ordem: selecionar, desmarcar, remover
         buttons_layout.addWidget(self.select_all_button)
         buttons_layout.addWidget(self.deselect_all_button)
         buttons_layout.addStretch()
