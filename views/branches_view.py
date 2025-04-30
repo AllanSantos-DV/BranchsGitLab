@@ -253,6 +253,39 @@ class BranchesView(QWidget):
         buttons_layout = QHBoxLayout(buttons_frame)
         buttons_layout.setContentsMargins(10, 8, 10, 8)
         
+        # Botões de expandir/recolher (agora adicionados primeiro)
+        self.expand_all_button = QPushButton("Expandir Tudo")
+        self.expand_all_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4A7FC1;
+                color: white;
+                border-radius: 4px;
+                padding: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2B5797;
+            }
+        """)
+        self.expand_all_button.setFixedWidth(150)
+        self.expand_all_button.clicked.connect(self._expand_all)
+        
+        self.collapse_all_button = QPushButton("Recolher Tudo")
+        self.collapse_all_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4A7FC1;
+                color: white;
+                border-radius: 4px;
+                padding: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2B5797;
+            }
+        """)
+        self.collapse_all_button.setFixedWidth(150)
+        self.collapse_all_button.clicked.connect(self._collapse_all)
+        
         self.select_all_button = QPushButton("Selecionar Todas")
         self.select_all_button.setStyleSheet("""
             QPushButton {
@@ -298,6 +331,9 @@ class BranchesView(QWidget):
         """)
         self.delete_button.setFixedWidth(180)
         
+        # Adicionar na ordem: expandir, recolher, selecionar, desmarcar
+        buttons_layout.addWidget(self.expand_all_button)
+        buttons_layout.addWidget(self.collapse_all_button)
         buttons_layout.addWidget(self.select_all_button)
         buttons_layout.addWidget(self.deselect_all_button)
         buttons_layout.addStretch()
@@ -619,6 +655,10 @@ class BranchesView(QWidget):
         if not self.select_all_button.isEnabled():
             return
             
+        # Primeiro expandir todos os itens
+        self.branches_tree.expandAll()
+            
+        # Depois selecionar todas as branches
         self.select_all_requested.emit()
         
     def _on_deselect_all_clicked(self):
@@ -796,10 +836,6 @@ class BranchesView(QWidget):
             # Caso contrário, use o método interno
             self._populate_tree(self.branches_tree.invisibleRootItem(), branch_tree, is_protected_func)
         
-        # Expandir o primeiro nível
-        for i in range(self.branches_tree.topLevelItemCount()):
-            self.branches_tree.topLevelItem(i).setExpanded(True)
-        
         # Aplicar ícones de expandir/recolher via CSS
         self._set_tree_icons()
         
@@ -835,14 +871,30 @@ class BranchesView(QWidget):
             is_protected_func: Função para verificar se uma branch é protegida
             path: Caminho acumulado
         """
-        # Ordenar as chaves para manter a ordem alfabética
-        sorted_keys = sorted(branch_dict.keys())
+        # Separar chaves em 2 grupos: diretórios/branches dentro de pastas e branches na raiz
+        folder_keys = []
+        root_branch_keys = []
         
-        for key in sorted_keys:
+        for key in branch_dict.keys():
             # Pular a chave especial __branch
             if key == "__branch":
                 continue
                 
+            value = branch_dict[key]
+            # Verificar se é uma folha (branch) ou um diretório
+            is_branch = "__branch" in value
+            
+            if is_branch and not path:  # Branch na raiz
+                root_branch_keys.append(key)
+            else:  # Diretório ou branch dentro de pasta
+                folder_keys.append(key)
+        
+        # Ordenar as chaves em cada grupo para manter a ordem alfabética
+        folder_keys.sort()
+        root_branch_keys.sort()
+        
+        # Primeiro processar pastas e branches dentro de pastas
+        for key in folder_keys:
             value = branch_dict[key]
             current_path = path + "/" + key if path else key
             
@@ -859,7 +911,14 @@ class BranchesView(QWidget):
                 
                 # Processar recursivamente os itens deste diretório
                 self._populate_tree(dir_item, value, is_protected_func, current_path)
-    
+        
+        # Depois processar branches na raiz (sem pastas)
+        for key in root_branch_keys:
+            value = branch_dict[key]
+            branch = value["__branch"]
+            is_protected = is_protected_func(branch.name)
+            branch_item = self._create_branch_item(parent_item, key, branch, is_protected)
+
     def _set_tree_icons(self):
         """Define os ícones de expandir/recolher na árvore"""
         closed_icon_path = self.get_resource_path("closed.png")
@@ -966,7 +1025,7 @@ class BranchesView(QWidget):
                 update_item_icons(item)
         
         # Iniciar o processamento a partir da raiz
-        update_item_icons(self.branches_tree.invisibleRootItem()) 
+        update_item_icons(self.branches_tree.invisibleRootItem())
 
     def get_selected_branches(self):
         """
@@ -1130,29 +1189,10 @@ class BranchesView(QWidget):
                 }
             """)
         
-    def _update_selection_icons(self):
-        """Atualiza os ícones das branches baseado no estado de seleção"""
-        def update_item_icons(parent):
-            for i in range(parent.childCount()):
-                item = parent.child(i)
-                
-                # Verificar se é uma branch (folha)
-                data = item.data(0, Qt.ItemDataRole.UserRole)
-                if data and data.get('is_leaf', True) and not data.get('is_protected', False):
-                    # Se for uma branch não protegida, atualizar ícone baseado na seleção
-                    if item.isSelected() and self.branch_selected_icon:
-                        item.setIcon(0, self.branch_selected_icon)
-                        
-                        # Não precisamos definir background aqui, pois o QTreeWidget::branch:selected
-                        # e QTreeWidget::item:selected já são aplicados automaticamente
-                    elif not item.isSelected() and self.branch_icon:
-                        item.setIcon(0, self.branch_icon)
-                        # Limpar fundos personalizados se houver
-                        item.setBackground(0, QBrush())
-                        item.setBackground(1, QBrush())
-                
-                # Processar recursivamente os filhos
-                update_item_icons(item)
+    def _expand_all(self):
+        """Expande todos os items da árvore"""
+        self.branches_tree.expandAll()
         
-        # Iniciar o processamento a partir da raiz
-        update_item_icons(self.branches_tree.invisibleRootItem()) 
+    def _collapse_all(self):
+        """Recolhe todos os items da árvore"""
+        self.branches_tree.collapseAll() 
