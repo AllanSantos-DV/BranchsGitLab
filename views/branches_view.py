@@ -800,7 +800,7 @@ class BranchesView(QWidget):
         for i in range(self.branches_tree.topLevelItemCount()):
             self.branches_tree.topLevelItem(i).setExpanded(True)
         
-        # Aplicar ícones
+        # Aplicar ícones de expandir/recolher via CSS
         self._set_tree_icons()
         
         # Aplicar ícones de seleção iniciais
@@ -870,22 +870,10 @@ class BranchesView(QWidget):
         open_icon_path = open_icon_path.replace('\\', '/')
         
         if os.path.exists(closed_icon_path.replace('/', '\\')) and os.path.exists(open_icon_path.replace('/', '\\')):
+            # Armazenar referências aos ícones, mesmo que não sejam usados programaticamente
+            # isso pode ser útil para uso futuro
             self.closed_icon = QIcon(closed_icon_path)
             self.open_icon = QIcon(open_icon_path)
-            
-            # Remover conexões anteriores para evitar conexões duplicadas
-            try:
-                self.branches_tree.itemExpanded.disconnect()
-                self.branches_tree.itemCollapsed.disconnect()
-            except:
-                pass  # Ignora se não houver conexões
-            
-            # Conectar sinais para troca de ícones
-            self.branches_tree.itemExpanded.connect(self._handle_item_expanded)
-            self.branches_tree.itemCollapsed.connect(self._handle_item_collapsed)
-            
-            # Aplicar ícones iniciais
-            self._apply_icons_to_all_items()
             
             # Aplicar estilo corrigido ao QTreeWidget para os branches
             self.branches_tree.setStyleSheet(f"""
@@ -928,6 +916,7 @@ class BranchesView(QWidget):
                 QTreeWidget::branch:selected {{
                     background-color: #D0E8FF;
                 }}
+                /* Apenas um único ícone para expandir/recolher */
                 QTreeWidget::branch:has-children:!has-siblings:closed,
                 QTreeWidget::branch:closed:has-children:has-siblings {{
                     border-image: none;
@@ -952,37 +941,32 @@ class BranchesView(QWidget):
         else:
             print(f"AVISO: Ícones não encontrados: {closed_icon_path}, {open_icon_path}")
     
-    def _handle_item_expanded(self, item):
-        """Manipula o evento de item expandido"""
-        if item.childCount() > 0 and hasattr(self, 'open_icon'):
-            item.setIcon(0, self.open_icon)
-    
-    def _handle_item_collapsed(self, item):
-        """Manipula o evento de item recolhido"""
-        if item.childCount() > 0 and hasattr(self, 'closed_icon'):
-            item.setIcon(0, self.closed_icon)
-    
-    def _apply_icons_to_all_items(self):
-        """Aplica ícones a todos os itens na árvore"""
-        if not hasattr(self, 'closed_icon') or not hasattr(self, 'open_icon'):
-            return
-            
-        for i in range(self.branches_tree.topLevelItemCount()):
-            self._apply_icons_recursively(self.branches_tree.topLevelItem(i))
-    
-    def _apply_icons_recursively(self, item):
-        """Aplica ícones a um item e seus filhos recursivamente"""
-        # Aplicar ícones apenas se o item tiver filhos
-        if item.childCount() > 0:
-            # Definir o ícone conforme o estado de expansão
-            if item.isExpanded():
-                item.setIcon(0, self.open_icon)
-            else:
-                item.setIcon(0, self.closed_icon)
+    def _update_selection_icons(self):
+        """Atualiza os ícones das branches baseado no estado de seleção"""
+        def update_item_icons(parent):
+            for i in range(parent.childCount()):
+                item = parent.child(i)
+                
+                # Verificar se é uma branch (folha)
+                data = item.data(0, Qt.ItemDataRole.UserRole)
+                if data and data.get('is_leaf', True) and not data.get('is_protected', False):
+                    # Se for uma branch não protegida, atualizar ícone baseado na seleção
+                    if item.isSelected() and self.branch_selected_icon:
+                        item.setIcon(0, self.branch_selected_icon)
+                        
+                        # Não precisamos definir background aqui, pois o QTreeWidget::branch:selected
+                        # e QTreeWidget::item:selected já são aplicados automaticamente
+                    elif not item.isSelected() and self.branch_icon:
+                        item.setIcon(0, self.branch_icon)
+                        # Limpar fundos personalizados se houver
+                        item.setBackground(0, QBrush())
+                        item.setBackground(1, QBrush())
+                
+                # Processar recursivamente os filhos
+                update_item_icons(item)
         
-        # Aplicar aos filhos
-        for i in range(item.childCount()):
-            self._apply_icons_recursively(item.child(i))
+        # Iniciar o processamento a partir da raiz
+        update_item_icons(self.branches_tree.invisibleRootItem()) 
 
     def get_selected_branches(self):
         """
