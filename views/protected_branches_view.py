@@ -509,9 +509,20 @@ class ProtectedBranchesView(QWidget):
             self.gitlab_protected_layout.addStretch()
         else:
             # Caso não haja branches protegidas pelo GitLab
-            no_branches_label = QLabel("Nenhuma branch protegida pelo GitLab")
+            no_branches_label = QLabel("Nenhuma branch protegida pelo GitLab encontrada")
             no_branches_label.setStyleSheet("color: #666666; font-style: italic;")
             self.gitlab_protected_layout.addWidget(no_branches_label)
+            
+            # Adicionar uma mensagem explicativa para usuários sem permissão
+            if len(project_branches) > 0:
+                info_label = QLabel(
+                    "Nota: Isto pode ocorrer porque você não tem permissão para acessar as branches protegidas neste projeto. "
+                    "Você ainda pode selecionar branches para proteção local no aplicativo."
+                )
+                info_label.setWordWrap(True)
+                info_label.setStyleSheet("color: #FF9900; font-style: italic; margin-top: 5px;")
+                self.gitlab_protected_layout.addWidget(info_label)
+            
             self.gitlab_protected_layout.addStretch()
         
         # Adicionar branches do projeto (excluindo as já protegidas pelo GitLab)

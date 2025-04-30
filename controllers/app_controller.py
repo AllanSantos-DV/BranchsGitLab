@@ -157,9 +157,35 @@ class AppController(QObject):
                 # Emitir sinal para processar na thread principal
                 self.protected_branches_loaded_signal.emit(result)
             else:
-                # Exibir mensagem de erro na thread principal
-                self.window.statusBar().showMessage(f"Erro ao carregar branches protegidas: {result}")
-                QMessageBox.critical(self.window, "Erro", f"Falha ao carregar branches protegidas: {result}")
+                # Verificar se é um erro de permissão (403 Forbidden)
+                if "403" in str(result) or "Forbidden" in str(result) or "acesso negado" in str(result).lower():
+                    # Se for um erro de permissão, apenas definir uma lista vazia de branches protegidas
+                    # e seguir para o carregamento das branches normais
+                    self.window.statusBar().showMessage("Usuário sem permissão para acessar branches protegidas. Carregando apenas branches normais.")
+                    self.gitlab_protected_branches = []
+                    
+                    # Atualizar mensagem de carregamento
+                    self.protected_branches_view.set_loading_state(True, "Carregando branches do projeto...")
+                    
+                    # Agora carregar todas as branches do projeto
+                    def on_branches_loaded(success, result):
+                        if success:
+                            # Emitir sinal para processar na thread principal
+                            self.branches_loaded_signal.emit(result)
+                        else:
+                            # Exibir mensagem de erro na thread principal
+                            self.window.statusBar().showMessage(f"Erro ao carregar branches: {result}")
+                            QMessageBox.critical(self.window, "Erro", f"Falha ao carregar branches: {result}")
+                            # Esconder indicador de carregamento em caso de erro
+                            self.protected_branches_view.set_loading_state(False)
+                    
+                    # Chamar diretamente a API para obter as branches
+                    success, result = self.gitlab_api.get_branches(self.current_project_id)
+                    on_branches_loaded(success, result)
+                else:
+                    # Outros tipos de erro - mostrar mensagem
+                    self.window.statusBar().showMessage(f"Erro ao carregar branches protegidas: {result}")
+                    QMessageBox.critical(self.window, "Erro", f"Falha ao carregar branches protegidas: {result}")
         
         # Iniciar o carregamento das branches protegidas pelo GitLab
         self.branch_controller.get_protected_branches(self.current_project_id, on_protected_branches_loaded)
@@ -197,7 +223,12 @@ class AppController(QObject):
         # Esconder indicador de carregamento
         self.protected_branches_view.set_loading_state(False)
         
-        # Configurar as branches na view
+        # Verificar se temos acesso às branches protegidas
+        if not hasattr(self, 'gitlab_protected_branches') or self.gitlab_protected_branches is None:
+            self.gitlab_protected_branches = []
+            self.window.statusBar().showMessage("Aviso: Sem acesso às branches protegidas. Mostrando apenas branches normais.")
+        
+        # Configurar as branches na view - mesmo sem branches protegidas, a view pode funcionar
         self.protected_branches_view.set_branches(project_branches, self.gitlab_protected_branches)
         
     def _on_protected_branches_selected(self, protected_branches, hide_protected):
