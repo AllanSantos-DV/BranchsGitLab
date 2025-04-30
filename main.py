@@ -9,13 +9,15 @@ permitindo a remoção segura de branches não utilizadas.
 Autor: Allan
 """
 
-import sys
 import os
-from PyQt6.QtWidgets import QApplication, QMainWindow
-from PyQt6.QtCore import Qt, QDir
+import sys
+
 from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QApplication, QMainWindow
+
 from controllers.app_controller import AppController
 from utils.constants import APP_STYLE
+
 
 class MainWindow(QMainWindow):
     """

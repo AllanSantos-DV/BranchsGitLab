@@ -6,11 +6,13 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from models.gitlab_api import GitLabAPI
 from models.git_repo import GitRepo
-from views.login_view import LoginView
+from models.ldap_auth import LDAPAuth
+from views.login_tab_view import LoginTabView
 from views.projects_view import ProjectsView
 from views.branches_view import BranchesView
 from views.protected_branches_view import ProtectedBranchesView
 from controllers.login_controller import LoginController
+from controllers.ldap_login_controller import LDAPLoginController
 from controllers.project_controller import ProjectController
 from controllers.branch_controller import BranchController
 
@@ -55,7 +57,7 @@ class AppController(QObject):
         self.window.setStatusBar(self.status_bar)
         
         # Criar as views
-        self.login_view = LoginView()
+        self.login_tab_view = LoginTabView()
         self.projects_view = ProjectsView()
         self.branches_view = BranchesView()
         self.protected_branches_view = ProtectedBranchesView()
@@ -77,13 +79,23 @@ class AppController(QObject):
         """
         self.gitlab_api = GitLabAPI()
         self.git_repo = GitRepo()
+        self.ldap_auth = LDAPAuth()
         
     def setup_controllers(self):
         """
         Configura os controllers específicos
         """
+        # Controller de login com token
         self.login_controller = LoginController(
-            self.login_view,
+            self.login_tab_view,
+            self.gitlab_api,
+            self
+        )
+        
+        # Controller de login LDAP
+        self.ldap_login_controller = LDAPLoginController(
+            self.login_tab_view,
+            self.ldap_auth,
             self.gitlab_api,
             self
         )
@@ -107,7 +119,7 @@ class AppController(QObject):
         Exibe a tela de login
         """
         self.tab_widget.clear()
-        self.tab_widget.addTab(self.login_view, "Login")
+        self.tab_widget.addTab(self.login_tab_view, "Login")
         
     def show_projects(self):
         """

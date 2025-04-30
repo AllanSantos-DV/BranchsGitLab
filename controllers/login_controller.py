@@ -41,7 +41,7 @@ class LoginController:
         Inicializa o controller de login
         
         Args:
-            view: View de login (LoginView)
+            view: View de login (LoginView ou LoginTabView)
             model: Modelo de API do GitLab (GitLabAPI)
             parent_controller: Controller pai (AppController)
         """
@@ -51,7 +51,11 @@ class LoginController:
         self.auth_thread = None
         
         # Conectar sinais da view
-        self.view.login_requested.connect(self.login)
+        # Verificar o tipo de view e conectar ao sinal apropriado
+        if hasattr(self.view, 'token_login_requested'):
+            self.view.token_login_requested.connect(self.login)
+        else:
+            self.view.login_requested.connect(self.login)
         
     def login(self, url, username, token):
         """
@@ -71,8 +75,13 @@ class LoginController:
             return
         
         # Desabilitar botão de login e mostrar status
-        self.view.set_login_button_enabled(False)
-        self.view.set_login_status("Conectando ao GitLab...")
+        # Verificar o tipo de view para chamar o método correto
+        if hasattr(self.view, 'set_token_login_button_enabled'):
+            self.view.set_token_login_button_enabled(False)
+            self.view.set_token_login_status("Conectando ao GitLab...")
+        else:
+            self.view.set_login_button_enabled(False)
+            self.view.set_login_status("Conectando ao GitLab...")
         
         # Criar e iniciar thread de autenticação
         self.auth_thread = AuthenticationThread(self.model, url, username, token)
@@ -88,7 +97,12 @@ class LoginController:
         
     def on_login_failure(self, message):
         """Callback para falha no login"""
-        self.view.set_login_status("")
+        # Verificar o tipo de view para chamar o método correto
+        if hasattr(self.view, 'set_token_login_status'):
+            self.view.set_token_login_status("")
+        else:
+            self.view.set_login_status("")
+            
         QMessageBox.critical(
             self.view, 
             "Erro de Login", 
@@ -97,5 +111,10 @@ class LoginController:
         
     def on_thread_finished(self):
         """Callback quando a thread termina"""
-        self.view.set_login_button_enabled(True)
+        # Verificar o tipo de view para chamar o método correto
+        if hasattr(self.view, 'set_token_login_button_enabled'):
+            self.view.set_token_login_button_enabled(True)
+        else:
+            self.view.set_login_button_enabled(True)
+            
         self.auth_thread = None 
