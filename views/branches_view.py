@@ -30,6 +30,9 @@ class BranchesView(QWidget):
             parent (QWidget): Widget pai
         """
         super().__init__(parent)
+        self.branch_icon = None
+        self.branch_selected_icon = None
+        self.lock_icon = None
         self.init_ui()
         
     def get_resource_path(self, relative_path):
@@ -53,6 +56,9 @@ class BranchesView(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(12)
+        
+        # Carregar ícones utilizados na interface
+        self._load_icons()
         
         # Título e informações do projeto
         title_frame = QFrame()
@@ -222,49 +228,9 @@ class BranchesView(QWidget):
         self.branches_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.branches_tree.customContextMenuRequested.connect(self._show_context_menu)
         self.branches_tree.setFrameShape(QFrame.Shape.NoFrame)
+        self.branches_tree.setIndentation(20)
         
-        # Definir ícones programaticamente
-        closed_icon_path = self.get_resource_path("closed.png")
-        open_icon_path = self.get_resource_path("open.png")
-        
-        if os.path.exists(closed_icon_path) and os.path.exists(open_icon_path):
-            self.branches_tree.setProperty("closed_icon", closed_icon_path)
-            self.branches_tree.setProperty("open_icon", open_icon_path)
-        else:
-            print(f"AVISO: Ícones não encontrados: {closed_icon_path}, {open_icon_path}")
-        
-        self.branches_tree.setStyleSheet("""
-            QTreeWidget {
-                background-color: white;
-                alternate-background-color: #F5F5F5;
-                border: none;
-                outline: none;
-            }
-            QTreeWidget::item {
-                padding: 5px;
-                min-height: 25px;
-                border-bottom: 1px solid #EEEEEE;
-                color: #333333;
-            }
-            QTreeWidget::item:selected {
-                background-color: #E1EFFE;
-                color: #2B5797;
-            }
-            QTreeWidget::item:hover {
-                background-color: #F0F5FF;
-            }
-            QHeaderView::section {
-                background-color: #F0F0F0;
-                padding: 8px 5px;
-                border: 1px solid #CCCCCC;
-                color: #333333;
-                font-weight: bold;
-            }
-            QTreeWidget::branch {
-                background: transparent;
-                margin: 1px;
-            }
-        """)
+        # O estilo será aplicado no método _set_tree_icons
         
         # Ajustar tamanho das colunas
         self.branches_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -366,7 +332,139 @@ class BranchesView(QWidget):
         self.deselect_all_button.clicked.connect(self._on_deselect_all_clicked)
         self.delete_button.clicked.connect(self._on_delete_clicked)
         
+        # Conectar evento de seleção para atualizar ícones
+        self.branches_tree.itemSelectionChanged.connect(self._update_selection_icons)
+        
         self.setLayout(layout)
+    
+    def _load_icons(self):
+        """Carrega todos os ícones utilizados na interface"""
+        # Ícones para expansão da árvore
+        closed_icon_path = self.get_resource_path("closed.png")
+        open_icon_path = self.get_resource_path("open.png")
+        
+        if os.path.exists(closed_icon_path) and os.path.exists(open_icon_path):
+            self.closed_icon = QIcon(closed_icon_path)
+            self.open_icon = QIcon(open_icon_path)
+        else:
+            print(f"AVISO: Ícones de expansão não encontrados: {closed_icon_path}, {open_icon_path}")
+            
+        # Ícone para branches não selecionadas
+        branch_icon_path = self.get_resource_path("branch.png")
+        if os.path.exists(branch_icon_path):
+            self.branch_icon = QIcon(branch_icon_path)
+        else:
+            # Criar um ícone padrão para branches
+            print(f"AVISO: Ícone de branch não encontrado: {branch_icon_path}, criando um ícone padrão")
+            self.branch_icon = self._create_default_branch_icon(False)
+            
+        # Ícone para branches selecionadas
+        branch_selected_path = self.get_resource_path("branch_selected.png")
+        if os.path.exists(branch_selected_path):
+            self.branch_selected_icon = QIcon(branch_selected_path)
+        else:
+            # Criar um ícone padrão para branches selecionadas
+            print(f"AVISO: Ícone de branch selecionada não encontrado: {branch_selected_path}, criando um ícone padrão")
+            self.branch_selected_icon = self._create_default_branch_icon(True)
+            
+        # Ícone para branches protegidas
+        lock_icon_path = self.get_resource_path("lock.png")
+        if os.path.exists(lock_icon_path):
+            self.lock_icon = QIcon(lock_icon_path)
+        else:
+            # Criar um ícone padrão para branches protegidas
+            print(f"AVISO: Ícone de proteção não encontrado: {lock_icon_path}, criando um ícone padrão")
+            self.lock_icon = self._create_default_lock_icon()
+            
+    def _create_default_branch_icon(self, selected):
+        """Cria um ícone padrão para branches a partir de elementos básicos
+        
+        Args:
+            selected (bool): Se True, cria um ícone para branch selecionada
+            
+        Returns:
+            QIcon: Ícone criado
+        """
+        from PyQt6.QtGui import QPainter, QPixmap, QPen, QPolygon, QColor
+        from PyQt6.QtCore import QPoint, Qt
+        
+        # Criar um pixmap vazio
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        
+        # Criar um pintor
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Definir cor de acordo com o estado (selecionado ou não)
+        if selected:
+            branch_color = QColor("#2B5797")  # Azul mais escuro para selecionado
+            painter.setBrush(QColor("#D0E8FF"))  # Fundo azul claro para selecionado
+        else:
+            branch_color = QColor("#333333")  # Cinza escuro para não selecionado
+            painter.setBrush(Qt.GlobalColor.transparent)  # Sem fundo
+        
+        # Desenhar um símbolo de bifurcação simples
+        pen = QPen(branch_color)
+        pen.setWidth(1)
+        painter.setPen(pen)
+        
+        # Desenhar um círculo de fundo se selecionado
+        if selected:
+            painter.drawEllipse(1, 1, 14, 14)
+        
+        # Desenhar uma linha vertical
+        painter.setPen(QPen(branch_color, 2))
+        painter.drawLine(8, 3, 8, 13)
+        
+        # Desenhar uma linha horizontal
+        painter.drawLine(8, 8, 13, 8)
+        
+        # Desenhar uma marca de check se selecionado
+        if selected:
+            painter.setPen(QPen(branch_color, 2))
+            points = [QPoint(4, 8), QPoint(6, 10), QPoint(11, 5)]
+            painter.drawPolyline(QPolygon(points))
+        
+        painter.end()
+        
+        return QIcon(pixmap)
+    
+    def _create_default_lock_icon(self):
+        """Cria um ícone padrão para branches protegidas
+        
+        Returns:
+            QIcon: Ícone de cadeado criado
+        """
+        from PyQt6.QtGui import QPainter, QPixmap, QPen, QColor
+        from PyQt6.QtCore import QRectF, Qt
+        
+        # Criar um pixmap vazio
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        
+        # Criar um pintor
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Definir cor
+        lock_color = QColor("#B22222")  # Vermelho escuro
+        
+        # Desenhar um cadeado simples
+        pen = QPen(lock_color)
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.setBrush(QColor(255, 220, 220, 128))  # Vermelho claro com transparência
+        
+        # Corpo do cadeado
+        painter.drawRoundedRect(QRectF(4, 7, 8, 7), 1, 1)
+        
+        # Arco do cadeado
+        painter.drawArc(5, 3, 6, 8, 0, 180 * 16)
+        
+        painter.end()
+        
+        return QIcon(pixmap)
     
     def _show_context_menu(self, position):
         """Mostra o menu de contexto ao clicar com o botão direito em uma branch"""
@@ -645,12 +743,28 @@ class BranchesView(QWidget):
                 item.setForeground(1, QBrush(QColor("#B22222")))  # Vermelho escuro
                 item.setForeground(0, QBrush(QColor("#666666")))  # Cinza para o nome
                 
+                # Ícone de cadeado para branches protegidas
+                if self.lock_icon:
+                    item.setIcon(0, self.lock_icon)
+                
                 # Desabilitar seleção para branches protegidas
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+                
+                # Adicionar estilo para mostrar que não é selecionável
+                item.setBackground(0, QBrush(QColor("#F8F8F8")))
+                item.setBackground(1, QBrush(QColor("#F8F8F8")))
             else:
                 item.setText(1, "Normal")
                 item.setForeground(1, QBrush(QColor("#006400")))  # Verde escuro
                 item.setForeground(0, QBrush(QColor("#333333")))  # Cor normal para o nome
+                
+                # Ícone folha para branches normais
+                if self.branch_icon:
+                    item.setIcon(0, self.branch_icon)
+                
+                # Tornar visualmente mais claro que é selecionável
+                item.setToolTip(0, "Clique para selecionar esta branch")
+                item.setToolTip(1, "Branch disponível para remoção")
         else:
             # É um diretório
             item.setData(0, Qt.ItemDataRole.UserRole, {
@@ -688,6 +802,9 @@ class BranchesView(QWidget):
         
         # Aplicar ícones
         self._set_tree_icons()
+        
+        # Aplicar ícones de seleção iniciais
+        self._update_selection_icons()
         
         # Verificar se existem branches não protegidas e atualizar estado dos botões
         self._update_buttons_state()
@@ -748,7 +865,11 @@ class BranchesView(QWidget):
         closed_icon_path = self.get_resource_path("closed.png")
         open_icon_path = self.get_resource_path("open.png")
         
-        if os.path.exists(closed_icon_path) and os.path.exists(open_icon_path):
+        # Converter caminhos para usar somente /
+        closed_icon_path = closed_icon_path.replace('\\', '/')
+        open_icon_path = open_icon_path.replace('\\', '/')
+        
+        if os.path.exists(closed_icon_path.replace('/', '\\')) and os.path.exists(open_icon_path.replace('/', '\\')):
             self.closed_icon = QIcon(closed_icon_path)
             self.open_icon = QIcon(open_icon_path)
             
@@ -765,6 +886,69 @@ class BranchesView(QWidget):
             
             # Aplicar ícones iniciais
             self._apply_icons_to_all_items()
+            
+            # Aplicar estilo corrigido ao QTreeWidget para os branches
+            self.branches_tree.setStyleSheet(f"""
+                QTreeWidget {{
+                    background-color: white;
+                    alternate-background-color: #F8F8F8;
+                    border: none;
+                    outline: none;
+                }}
+                QTreeWidget::item {{
+                    padding: 6px;
+                    min-height: 28px;
+                    border-bottom: 1px solid #EEEEEE;
+                    color: #333333;
+                    margin: 2px 0;
+                    border-radius: 3px;
+                }}
+                QTreeWidget::item:selected {{
+                    background-color: #D0E8FF;
+                    color: #2B5797;
+                    border: 1px solid #A9CCF3;
+                    font-weight: bold;
+                }}
+                QTreeWidget::item:hover:!selected {{
+                    background-color: #F0F5FF;
+                }}
+                QTreeWidget::item:selected:hover {{
+                    background-color: #BBD9FF;
+                }}
+                QHeaderView::section {{
+                    background-color: #F0F0F0;
+                    padding: 8px 5px;
+                    border: 1px solid #CCCCCC;
+                    color: #333333;
+                    font-weight: bold;
+                }}
+                QTreeWidget::branch {{
+                    background: transparent;
+                }}
+                QTreeWidget::branch:selected {{
+                    background-color: #D0E8FF;
+                }}
+                QTreeWidget::branch:has-children:!has-siblings:closed,
+                QTreeWidget::branch:closed:has-children:has-siblings {{
+                    border-image: none;
+                    image: url({closed_icon_path});
+                }}
+                QTreeWidget::branch:open:has-children:!has-siblings,
+                QTreeWidget::branch:open:has-children:has-siblings {{
+                    border-image: none;
+                    image: url({open_icon_path});
+                }}
+                /* Correção específica para garantir que não haja faixas pretas na seleção */
+                QTreeWidget::branch:adjoins-item:selected {{
+                    background-color: #D0E8FF;
+                }}
+                QTreeWidget::branch:has-siblings:adjoins-item:selected {{
+                    background-color: #D0E8FF;
+                }}
+                QTreeWidget::branch:has-siblings:!adjoins-item:selected {{
+                    background-color: #D0E8FF;
+                }}
+            """)
         else:
             print(f"AVISO: Ícones não encontrados: {closed_icon_path}, {open_icon_path}")
     
@@ -847,10 +1031,16 @@ class BranchesView(QWidget):
         
         # Iniciar a seleção a partir da raiz invisível
         select_if_not_protected(self.branches_tree.invisibleRootItem())
+        
+        # Atualizar os ícones de seleção
+        self._update_selection_icons()
                 
     def deselect_all_branches(self):
         """Desmarca todas as branches"""
-        self.branches_tree.clearSelection() 
+        self.branches_tree.clearSelection()
+        
+        # Atualizar os ícones de seleção
+        self._update_selection_icons()
     
     def _count_deletable_branches(self):
         """
@@ -956,34 +1146,29 @@ class BranchesView(QWidget):
                 }
             """)
         
-    def _apply_icons_to_all_items(self):
-        """Aplica ícones a todos os itens na árvore"""
-        if not hasattr(self, 'closed_icon') or not hasattr(self, 'open_icon'):
-            return
-            
-        for i in range(self.branches_tree.topLevelItemCount()):
-            self._apply_icons_recursively(self.branches_tree.topLevelItem(i))
-    
-    def _apply_icons_recursively(self, item):
-        """Aplica ícones a um item e seus filhos recursivamente"""
-        # Aplicar ícones apenas se o item tiver filhos
-        if item.childCount() > 0:
-            # Definir o ícone conforme o estado de expansão
-            if item.isExpanded():
-                item.setIcon(0, self.open_icon)
-            else:
-                item.setIcon(0, self.closed_icon)
+    def _update_selection_icons(self):
+        """Atualiza os ícones das branches baseado no estado de seleção"""
+        def update_item_icons(parent):
+            for i in range(parent.childCount()):
+                item = parent.child(i)
+                
+                # Verificar se é uma branch (folha)
+                data = item.data(0, Qt.ItemDataRole.UserRole)
+                if data and data.get('is_leaf', True) and not data.get('is_protected', False):
+                    # Se for uma branch não protegida, atualizar ícone baseado na seleção
+                    if item.isSelected() and self.branch_selected_icon:
+                        item.setIcon(0, self.branch_selected_icon)
+                        
+                        # Não precisamos definir background aqui, pois o QTreeWidget::branch:selected
+                        # e QTreeWidget::item:selected já são aplicados automaticamente
+                    elif not item.isSelected() and self.branch_icon:
+                        item.setIcon(0, self.branch_icon)
+                        # Limpar fundos personalizados se houver
+                        item.setBackground(0, QBrush())
+                        item.setBackground(1, QBrush())
+                
+                # Processar recursivamente os filhos
+                update_item_icons(item)
         
-        # Aplicar aos filhos
-        for i in range(item.childCount()):
-            self._apply_icons_recursively(item.child(i))
-
-    def clear_branches(self):
-        """Limpa a árvore de branches"""
-        self.branches_tree.clear()
-        self.filter_input.clear()
-        
-        # Desabilitar botões quando a lista é limpa
-        self.select_all_button.setEnabled(False)
-        self.deselect_all_button.setEnabled(False)
-        self.delete_button.setEnabled(False) 
+        # Iniciar o processamento a partir da raiz
+        update_item_icons(self.branches_tree.invisibleRootItem()) 
