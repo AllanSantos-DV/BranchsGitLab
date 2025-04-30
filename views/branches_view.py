@@ -562,6 +562,31 @@ class BranchesView(QWidget):
         self.filter_input.setEnabled(not is_loading)
         self.back_button.setEnabled(not is_loading)
         
+        # Atualizar estilos visuais dos botões de acordo com o estado
+        if is_loading:
+            self._disable_button_style(self.select_all_button)
+            self._disable_button_style(self.deselect_all_button)
+            self._disable_delete_button_style(self.delete_button)
+        else:
+            # Quando terminar o carregamento, atualizar o estado dos botões baseado nas branches disponíveis
+            self._update_buttons_state()
+            
+            # Garantir que o botão de desmarcar esteja ativo se houver qualquer item na árvore
+            if self.branches_tree.topLevelItemCount() > 0:
+                self.deselect_all_button.setEnabled(True)
+                self.deselect_all_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4A7FC1;
+                        color: white;
+                        border-radius: 4px;
+                        padding: 6px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #2B5797;
+                    }
+                """)
+    
     def prepare_progress(self, total_items):
         """Prepara a barra de progresso para exibir o progresso"""
         self.progress_bar.setRange(0, total_items)
@@ -583,6 +608,11 @@ class BranchesView(QWidget):
         self.select_all_button.setEnabled(False)
         self.deselect_all_button.setEnabled(False)
         self.delete_button.setEnabled(False)
+        
+        # Aplicar estilo visual de desabilitado
+        self._disable_button_style(self.select_all_button)
+        self._disable_button_style(self.deselect_all_button)
+        self._disable_delete_button_style(self.delete_button)
     
     def _create_branch_item(self, parent, name, branch=None, is_protected=False):
         """
@@ -659,8 +689,24 @@ class BranchesView(QWidget):
         # Aplicar ícones
         self._set_tree_icons()
         
-        # Verificar se existem branches não protegidas
+        # Verificar se existem branches não protegidas e atualizar estado dos botões
         self._update_buttons_state()
+        
+        # Garantir que o botão de desmarcar todas esteja sempre ativado quando há items
+        if self.branches_tree.topLevelItemCount() > 0:
+            self.deselect_all_button.setEnabled(True)
+            self.deselect_all_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4A7FC1;
+                    color: white;
+                    border-radius: 4px;
+                    padding: 6px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #2B5797;
+                }
+            """)
     
     def _populate_tree(self, parent_item, branch_dict, is_protected_func, path=""):
         """
@@ -842,6 +888,7 @@ class BranchesView(QWidget):
         
         self.select_all_button.setEnabled(has_deletable_branches)
         self.delete_button.setEnabled(has_deletable_branches)
+        self.deselect_all_button.setEnabled(has_deletable_branches)
         
         if not has_deletable_branches:
             self.select_all_button.setStyleSheet("""
@@ -854,6 +901,15 @@ class BranchesView(QWidget):
                 }
             """)
             self.delete_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #AAAAAA;
+                    color: #DDDDDD;
+                    border-radius: 4px;
+                    padding: 6px;
+                    font-weight: bold;
+                }
+            """)
+            self.deselect_all_button.setStyleSheet("""
                 QPushButton {
                     background-color: #AAAAAA;
                     color: #DDDDDD;
@@ -885,6 +941,18 @@ class BranchesView(QWidget):
                 }
                 QPushButton:hover {
                     background-color: #951500;
+                }
+            """)
+            self.deselect_all_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4A7FC1;
+                    color: white;
+                    border-radius: 4px;
+                    padding: 6px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #2B5797;
                 }
             """)
         
