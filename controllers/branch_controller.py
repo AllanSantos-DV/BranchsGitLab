@@ -1,8 +1,10 @@
 """
 Controller para gerenciar as branches do GitLab e repositório local
 """
-from PyQt6.QtWidgets import QMessageBox, QTreeWidgetItem
-from PyQt6.QtCore import QThread, pyqtSignal, QObject
+from PyQt6.QtWidgets import QMessageBox, QTreeWidgetItem, QDialog, QVBoxLayout, QHBoxLayout, QLabel
+from PyQt6.QtWidgets import QPushButton, QScrollArea, QWidget, QCheckBox, QFrame, QDialogButtonBox, QSizePolicy
+from PyQt6.QtCore import QThread, pyqtSignal, QObject, Qt, QSize
+from PyQt6.QtGui import QIcon, QColor, QPalette
 from models.gitlab_api import GitLabAPI
 import time
 
@@ -344,19 +346,32 @@ class BranchController(QObject):
         if not branch_names:
             return  # Todas as branches eram protegidas
         
-        # Confirmar com o usuário
-        branch_list = "\n".join(branch_names)
-        local_message = " e localmente" if delete_local else ""
-        response = QMessageBox.question(
+        # Usar a view de confirmação de exclusão em vez de criar o diálogo no controller
+        from views.delete_confirmation_dialog import DeleteConfirmationDialog
+        
+        # Criar e exibir o diálogo de confirmação
+        dialog = DeleteConfirmationDialog(
             self.view,
-            "Confirmar Exclusão",
-            f"Tem certeza que deseja remover as seguintes branches do GitLab{local_message}?\n\n{branch_list}",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            branch_names,
+            delete_local,
+            resource_path_provider=self.view.get_resource_path
         )
         
-        if response != QMessageBox.StandardButton.Yes:
-            return
-            
+        # Se o usuário confirmar, prosseguir com a exclusão
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Obter a lista final de branches (pode ter sido modificada no diálogo)
+            final_branches = dialog.get_selected_branches()
+            if final_branches:
+                self._start_branch_deletion(final_branches, delete_local)
+    
+    def _start_branch_deletion(self, branch_names, delete_local):
+        """
+        Inicia o processo de remoção das branches após confirmação
+        
+        Args:
+            branch_names: Lista de nomes de branches para deletar
+            delete_local: Se True, também deleta branches locais
+        """
         # Preparar barra de progresso
         total_branches = len(branch_names)
         self.view.prepare_progress(total_branches)
