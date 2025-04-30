@@ -11,6 +11,8 @@ Aplicação desktop para gerenciar branches de projetos no GitLab, permitindo a 
 
 ### Gerenciamento de Branches
 - Visualização hierárquica de branches em estrutura de árvore
+- Branches recolhidas por padrão para facilitar a navegação
+- Botões para expandir e recolher todas as branches da árvore
 - Seleção múltipla de branches para remoção
 - Proteção de branches contra exclusão acidental
 - Configuração personalizada de branches protegidas por projeto
@@ -31,6 +33,9 @@ Aplicação desktop para gerenciar branches de projetos no GitLab, permitindo a 
 ### Segurança
 - Validação de conexão segura com o GitLab
 - Confirmação de exclusão com listagem de branches afetadas
+- Visualização aprimorada da lista de branches a serem excluídas com cores alternadas
+- Confirmação de segurança que requer rolar a lista completa de branches
+- Possibilidade de remover branches individuais da seleção antes da exclusão
 - Proteção contra exclusão de branches importantes
 - Verificação dupla de branches protegidas antes da exclusão
 - Suporte a autenticação com token para maior segurança
@@ -54,7 +59,8 @@ projeto/
   │   ├── login_view.py        # Tela de login
   │   ├── projects_view.py     # Tela de seleção de projetos
   │   ├── protected_branches_view.py  # Tela de configuração de branches protegidas
-  │   └── branches_view.py     # Tela de gerenciamento de branches
+  │   ├── branches_view.py     # Tela de gerenciamento de branches
+  │   └── delete_confirmation_dialog.py # Diálogo de confirmação de exclusão
   │
   ├── controllers/             # Camada de controle e lógica da aplicação
   │   ├── app_controller.py    # Controller principal e coordenação
@@ -77,7 +83,7 @@ projeto/
 2. **Seleção de Projeto**: Lista de projetos disponíveis é carregada para seleção
 3. **Configuração de Branches Protegidas**: O usuário configura quais branches devem ser protegidas
 4. **Gerenciamento de Branches**: Visualização e seleção de branches para possível remoção
-5. **Exclusão Segura**: Confirmação e execução da remoção de branches selecionadas
+5. **Exclusão Segura**: Confirmação e execução da remoção de branches selecionadas, com validação de segurança multi-estágio
 
 ### Tecnologias Utilizadas
 
@@ -143,13 +149,16 @@ python main.py
    - Clique em "Confirmar e Continuar"
 
 4. **Gerenciamento de Branches**:
-   - Navegue pela estrutura de árvore de branches
+   - Navegue pela estrutura de árvore de branches (inicialmente recolhida)
+   - Use os botões de expandir/recolher para controlar a visualização
    - Selecione as branches que deseja remover
    - Use os filtros para encontrar branches específicas
    - Clique em "Remover Branches Selecionadas"
 
 5. **Confirmação e Exclusão**:
    - Revise a lista de branches a serem removidas
+   - Role até o final da lista para habilitar a opção de confirmação
+   - Marque a caixa de confirmação indicando que compreende a irreversibilidade da ação
    - Confirme a ação para proceder com a exclusão
    - Acompanhe o progresso da operação
 
