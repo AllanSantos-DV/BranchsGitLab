@@ -1,7 +1,7 @@
 """
 Controller principal da aplicação
 """
-from PyQt6.QtWidgets import QMainWindow, QTabWidget, QStatusBar, QMessageBox
+from PyQt6.QtWidgets import QMainWindow, QTabWidget, QStatusBar, QMessageBox, QWidget
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from models.gitlab_api import GitLabAPI
@@ -11,10 +11,12 @@ from views.login_tab_view import LoginTabView
 from views.projects_view import ProjectsView
 from views.branches_view import BranchesView
 from views.protected_branches_view import ProtectedBranchesView
+from views.merge_branches_view import MergeBranchesView
 from controllers.login_controller import LoginController
 from controllers.ldap_login_controller import LDAPLoginController
 from controllers.project_controller import ProjectController
 from controllers.branch_controller import BranchController
+from controllers.merge_controller import MergeController
 
 class AppController(QObject):
     """
@@ -61,12 +63,14 @@ class AppController(QObject):
         self.projects_view = ProjectsView()
         self.branches_view = BranchesView()
         self.protected_branches_view = ProtectedBranchesView()
+        self.merge_branches_view = MergeBranchesView()
         
         # Conectar sinais
         self.branches_view.back_to_projects_requested.connect(self.show_projects)
         self.protected_branches_view.back_to_projects_requested.connect(self.show_projects)
         self.protected_branches_view.branches_selected.connect(self._on_protected_branches_selected)
         self.protected_branches_view.protected_branches_selected_signal.connect(self._on_protected_branches_selected_dict)
+        self.merge_branches_view.back_to_projects_requested.connect(self.show_projects)
         
         # Conectar sinal para desabilitar botões da protected_branches_view quando voltar da branches_view
         self.branches_view.disable_protected_branches_buttons_requested.connect(
@@ -111,6 +115,12 @@ class AppController(QObject):
             self.branches_view,
             self.gitlab_api,
             self.git_repo,
+            self
+        )
+        
+        self.merge_controller = MergeController(
+            self.merge_branches_view,
+            self.gitlab_api,
             self
         )
         
@@ -217,8 +227,11 @@ class AppController(QObject):
     @pyqtSlot(list)
     def _on_project_branches_loaded(self, branches):
         """Slot chamado na thread principal quando as branches do projeto são carregadas"""
+        # Armazenar as branches para uso em outras telas
+        self.project_branches = branches
+        
         # Extrair apenas os nomes das branches
-        project_branches = [branch.name for branch in branches]
+        project_branch_names = [branch.name for branch in branches]
         
         # Esconder indicador de carregamento
         self.protected_branches_view.set_loading_state(False)
@@ -229,7 +242,7 @@ class AppController(QObject):
             self.window.statusBar().showMessage("Aviso: Sem acesso às branches protegidas. Mostrando apenas branches normais.")
         
         # Configurar as branches na view - mesmo sem branches protegidas, a view pode funcionar
-        self.protected_branches_view.set_branches(project_branches, self.gitlab_protected_branches)
+        self.protected_branches_view.set_branches(project_branch_names, self.gitlab_protected_branches)
         
     def _on_protected_branches_selected(self, protected_branches, hide_protected):
         """
@@ -239,15 +252,19 @@ class AppController(QObject):
             protected_branches: Lista de branches selecionadas como protegidas
             hide_protected: True para esconder branches protegidas da visualização
         """
+        # Armazenar a lista de branches protegidas para uso em outras telas
+        self.selected_protected_branches = protected_branches
+        self.hide_protected_branches = hide_protected
+        
         # Configurar as branches protegidas no controlador
         self.branch_controller.set_protected_branches(protected_branches)
         
         # Configurar se as branches protegidas devem ser ocultadas
         self.branch_controller.set_hide_protected_branches(hide_protected)
         
-        # Agora carregar a tela de branches
+        # Agora carregar a tela de branches com abas
         self.branch_controller.set_project(self.current_project_id, self.current_project_name)
-        self.show_branches()
+        self.show_branches_with_tabs()
         
     def _on_protected_branches_selected_dict(self, protected_branches_dict):
         """
@@ -268,24 +285,78 @@ class AppController(QObject):
         gitlab_protected = protected_branches_dict.get('protected_by_gitlab', [])
         all_protected = protected_branches + gitlab_protected
         
+        # Armazenar a lista de branches protegidas para uso em outras telas
+        self.selected_protected_branches = all_protected
+        
+        # Usar o valor do checkbox, ou True como padrão se não estiver presente
+        hide_protected = protected_branches_dict.get('hide_protected', True)
+        self.hide_protected_branches = hide_protected
+        
         # Configurar as branches protegidas no controlador
         self.branch_controller.set_protected_branches(all_protected)
         
         # Configurar se as branches protegidas devem ser ocultadas
-        # Usar o valor do checkbox, ou True como padrão se não estiver presente
-        hide_protected = protected_branches_dict.get('hide_protected', True)
         self.branch_controller.set_hide_protected_branches(hide_protected)
         
-        # Agora carregar a tela de branches
+        # Agora carregar a tela de branches com abas
         self.branch_controller.set_project(self.current_project_id, self.current_project_name)
-        self.show_branches()
+        self.show_branches_with_tabs()
+        
+    def show_branches_with_tabs(self):
+        """
+        Exibe as abas para gerenciamento e merge de branches
+        """
+        self.tab_widget.clear()
+        
+        # Adicionar aba de gerenciamento de branches (padrão)
+        self.tab_widget.addTab(self.branches_view, "Gerenciar Branches")
+        
+        # Verificar se deve mostrar a aba de merge
+        should_show_merge_tab = self._should_show_merge_tab()
+        
+        # Adicionar aba de merge se necessário
+        if should_show_merge_tab:
+            # Inicializar o controller de merge com o projeto atual
+            self.merge_controller.set_project(
+                self.current_project_id, 
+                self.current_project_name,
+                [b.name for b in self.project_branches],
+                self.selected_protected_branches
+            )
+            
+            # Adicionar a aba de merge
+            self.tab_widget.addTab(self.merge_branches_view, "Merge de Branches")
+        else:
+            # Adicionar uma aba desabilitada para fins de UI
+            disabled_tab_index = self.tab_widget.addTab(QWidget(), "Merge de Branches")
+            self.tab_widget.setTabEnabled(disabled_tab_index, False)
+    
+    def _should_show_merge_tab(self):
+        """
+        Verifica se a aba de merge deve ser exibida
+        
+        Returns:
+            bool: True se a aba de merge deve ser exibida, False caso contrário
+        """
+        # Verificar se há pelo menos duas branches desprotegidas para poder realizar merge
+        if not hasattr(self, 'project_branches') or not hasattr(self, 'selected_protected_branches'):
+            return False
+            
+        # Obter nomes de todas as branches
+        all_branch_names = [branch.name for branch in self.project_branches]
+        
+        # Filtrar apenas branches desprotegidas
+        unprotected_branches = [b for b in all_branch_names if b not in self.selected_protected_branches]
+        
+        # Deve haver pelo menos duas branches desprotegidas para realizar merge
+        return len(unprotected_branches) >= 2
         
     def show_branches(self):
         """
-        Exibe a tela de branches
+        Exibe a tela de branches (compatibilidade com código existente)
         """
-        self.tab_widget.clear()
-        self.tab_widget.addTab(self.branches_view, "Branches")
+        # Usar a nova função que suporta abas
+        self.show_branches_with_tabs()
         
     def set_status(self, message):
         """
