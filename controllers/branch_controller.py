@@ -416,7 +416,41 @@ class BranchController(QObject):
         """Callback para quando todas as operações de deleção são concluídas"""
         self.view.set_loading_state(False)
         QMessageBox.information(self.view, "Concluído", "Operação de remoção finalizada.")
-        self.load_branches()  # Recarregar a lista de branches 
+        
+        # Recarregar a lista de branches
+        self.load_branches()
+        
+        # SOLUÇÃO AGRESSIVA: Forçar atualização completa de todas as visualizações de branches
+        if self.parent_controller:
+            # 1. Atualizar o modelo principal no AppController
+            if hasattr(self.parent_controller, 'current_project_id'):
+                # Forçar recarregamento direto da API
+                success, result = self.gitlab_api.get_branches(self.parent_controller.current_project_id)
+                if success:
+                    # Atualizar o modelo no AppController
+                    self.parent_controller.project_branches = result
+                    
+                    # 2. Atualizar a view de merge explicitamente
+                    if hasattr(self.parent_controller, 'merge_controller'):
+                        # Configurar o controller de merge com os dados atualizados
+                        branch_names = [b.name for b in result]
+                        
+                        # Garantir que a tab de merge tenha as branches atualizadas
+                        self.parent_controller.merge_controller.set_project(
+                            self.parent_controller.current_project_id,
+                            self.parent_controller.current_project_name,
+                            branch_names,
+                            self.parent_controller.selected_protected_branches
+                        )
+                        
+                        # 3. Forçar refresh do display
+                        if hasattr(self.parent_controller.merge_controller.view, 'refresh_branches_display'):
+                            # Forçar atualização da view de merge
+                            self.parent_controller.merge_controller.view.refresh_branches_display()
+                            
+            # 4. Notificar o AppController para garantir
+            if hasattr(self.parent_controller, 'update_merge_tab_branches'):
+                self.parent_controller.update_merge_tab_branches()
 
     def _populate_tree(self, parent_item, branch_dict, is_protected_func, path=""):
         """
@@ -485,4 +519,15 @@ class BranchController(QObject):
         Returns:
             bool: True se a branch estiver protegida pelo GitLab, False caso contrário
         """
-        return branch_name in self.gitlab_protected_branches 
+        return branch_name in self.gitlab_protected_branches
+
+    def update_branches_after_deletion(self):
+        """
+        Atualiza a lista de branches após a exclusão de branches
+        """
+        # Recarregar a lista de branches
+        self.load_branches()
+        
+        # Notificar o controller pai para atualizar a aba de merge, se existir
+        if self.parent_controller and hasattr(self.parent_controller, 'update_merge_tab_branches'):
+            self.parent_controller.update_merge_tab_branches() 

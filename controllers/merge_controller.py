@@ -175,6 +175,8 @@ class MergeController(QObject):
         self.current_project_id = None
         self.current_project_name = None
         self.merge_thread = None
+        self.branch_deletion_pending = False
+        self.deleted_branch = None
         
         # Conectar sinais da view
         self.view.merge_branches_requested.connect(self._on_merge_requested)
@@ -192,6 +194,11 @@ class MergeController(QObject):
         """
         self.current_project_id = project_id
         self.current_project_name = project_name
+        
+        # Armazenar as branches atualizadas na view para uso pelo refresh_branches_display
+        # Usando _controller_branches ao invés de __controller_branches para evitar name mangling
+        self.view._controller_branches = branches.copy()
+        self.view._controller_protected_branches = protected_branches.copy()
         
         # Configurar a view com os dados do projeto
         self.view.set_project_name(project_name)
@@ -315,39 +322,62 @@ class MergeController(QObject):
                 
             self.view.status_label.setText(message)
             
-            # Se solicitado, deletar a branch source
+            # Preparar detalhes para exibição
+            details = ""
+            if skipped_merges:
+                details = "Detalhes dos merges pulados:\n\n"
+                for target_branch, reason in skipped_merges:
+                    details += f"• {target_branch}: {reason}\n"
+            
+            # Verificar se deve deletar a branch source
+            delete_message = ""
+            if self.delete_source:
+                delete_message = f"\n\nA branch de origem '{self.source_branch}' será excluída após fechar esta mensagem."
+            
+            # Sempre mostrar a mensagem de sucesso com detalhes
+            if details:
+                # Se temos detalhes de merges pulados
+                result_message = QMessageBox.information(
+                    self.view, 
+                    "Sucesso", 
+                    f"{message}\n\n{details}{delete_message}",
+                    QMessageBox.StandardButton.Ok
+                )
+            else:
+                # Se não temos detalhes para mostrar
+                result_message = QMessageBox.information(
+                    self.view, 
+                    "Sucesso", 
+                    f"{message}{delete_message}",
+                    QMessageBox.StandardButton.Ok
+                )
+            
+            # Depois de mostrar os detalhes, se solicitado, deletar a branch source
             if self.delete_source:
                 if self.parent_controller:
-                    # Usar a funcionalidade existente para deletar a branch
-                    # Isso abrirá a tela de confirmação de deleção já existente
+                    # Armazenar a flag indicando que uma branch será deletada
+                    # Isso será usado para garantir que a aba de merge seja atualizada depois
+                    self.branch_deletion_pending = True
+                    self.deleted_branch = self.source_branch
+                    
+                    # Chamar a função para deletar branches - usa o fluxo padrão com confirmação
                     self.parent_controller.branch_controller.delete_branches(
                         [self.source_branch], False
                     )
+                    
+                    # NÃO VOLTAMOS para a tela de projetos aqui, pois o fluxo
+                    # continuará após o usuário confirmar a deleção na tela padrão
                 else:
                     QMessageBox.warning(
                         self.view, 
                         "Aviso", 
                         "Não foi possível iniciar o processo de deleção da branch de origem."
                     )
+                    
+                    # Voltar para a tela de projetos
+                    self._on_back_requested()
             else:
-                # Mostrar mensagem de sucesso com detalhes sobre merges pulados
-                if skipped_merges:
-                    details = "Detalhes dos merges pulados:\n\n"
-                    for target_branch, reason in skipped_merges:
-                        details += f"• {target_branch}: {reason}\n"
-                    
-                    QMessageBox.information(
-                        self.view, 
-                        "Sucesso", 
-                        f"{message}\n\n{details}"
-                    )
-                else:
-                    QMessageBox.information(
-                        self.view, 
-                        "Sucesso", 
-                        "Todos os merges foram concluídos com sucesso!"
-                    )
-                    
+                # Se não há deleção, voltar para a tela de projetos
                 self._on_back_requested()
         else:
             # Criar mensagem detalhada com os erros e merges pulados
@@ -379,6 +409,22 @@ class MergeController(QObject):
                 self.merge_thread.wait()
             else:
                 return
+        
+        # Verificar se houve uma deleção de branch e forçar atualização se necessário
+        if hasattr(self, 'branch_deletion_pending') and self.branch_deletion_pending:
+            self.branch_deletion_pending = False
+            
+            # Forçar recarregamento das branches no projeto atual
+            if hasattr(self.parent_controller, 'current_project_id'):
+                # Recarregar as branches do projeto
+                success, result = self.gitlab_api.get_branches(self.parent_controller.current_project_id)
+                if success:
+                    # Atualizar a lista de branches no controller principal
+                    self.parent_controller.project_branches = result
+                    
+                    # Forçar a atualização da tela de merge
+                    if hasattr(self.parent_controller, 'update_merge_tab_branches'):
+                        self.parent_controller.update_merge_tab_branches()
         
         if self.parent_controller:
             self.parent_controller.show_projects() 

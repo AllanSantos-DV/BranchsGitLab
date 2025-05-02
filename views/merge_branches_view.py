@@ -388,6 +388,10 @@ class MergeBranchesView(QWidget):
         """
         if protected_branches is None:
             protected_branches = []
+        
+        # Armazenar listas originais para uso posterior
+        self.original_branches = branches.copy()
+        self.protected_branches = protected_branches.copy()
             
         # Filtrar branches protegidas para não aparecerem como source
         unprotected_branches = [b for b in branches if b not in protected_branches]
@@ -399,19 +403,26 @@ class MergeBranchesView(QWidget):
             
         # Configurar a lista de target
         self.target_branches_list.clear()
+        
+        # Adicionar todas as branches como possíveis targets, incluindo protegidas,
+        # exceto a branch atual selecionada como source
+        current_source = self.source_branch_combo.currentText() if self.source_branch_combo.count() > 0 else ""
+        
         for branch in sorted(branches):
-            # Adicionar todas as branches como possíveis targets
-            item = QListWidgetItem(branch)
+            # Não adicionar a branch como destino se for a mesma que está selecionada como source
+            if branch != current_source:
+                item = QListWidgetItem(branch)
+                
+                # Se for protegida, destacar visualmente
+                if branch in protected_branches:
+                    item.setForeground(QBrush(QColor("#999999")))
+                    item.setToolTip("Branch protegida")
+                
+                self.target_branches_list.addItem(item)
             
-            # Se for protegida, destacar de alguma forma ou tornar não selecionável
-            if branch in protected_branches:
-                item.setForeground(QBrush(QColor("#999999")))
-                item.setToolTip("Branch protegida")
-            
-            self.target_branches_list.addItem(item)
-            
-        # Conectar eventos para atualizar o estado do botão
+        # Conectar eventos para atualizar o estado do botão e a lista de targets
         self.source_branch_combo.currentTextChanged.connect(self._update_button_state)
+        self.source_branch_combo.currentTextChanged.connect(self._recreate_target_list)
         self.target_branches_list.itemSelectionChanged.connect(self._update_button_state)
         
         # Atualizar o estado do botão
@@ -425,6 +436,36 @@ class MergeBranchesView(QWidget):
         selected_targets = len(self.target_branches_list.selectedItems()) > 0
         
         self.merge_button.setEnabled(has_source and selected_targets)
+    
+    def _recreate_target_list(self, source_branch):
+        """
+        Recria a lista de targets para excluir a branch de origem
+        
+        Args:
+            source_branch (str): Nome da branch de origem selecionada
+        """
+        # Salvar as seleções atuais
+        current_selections = [item.text() for item in self.target_branches_list.selectedItems()]
+        
+        # Recriar a lista de targets
+        self.target_branches_list.clear()
+        
+        # Adicionar todas as branches como targets, exceto a branch selecionada como source
+        if hasattr(self, 'original_branches') and hasattr(self, 'protected_branches'):
+            for branch in sorted(self.original_branches):
+                if branch != source_branch:
+                    item = QListWidgetItem(branch)
+                    
+                    # Se for protegida, destacar visualmente
+                    if branch in self.protected_branches:
+                        item.setForeground(QBrush(QColor("#999999")))
+                        item.setToolTip("Branch protegida")
+                    
+                    self.target_branches_list.addItem(item)
+                    
+                    # Restaurar seleção se estava selecionado antes
+                    if branch in current_selections:
+                        item.setSelected(True)
     
     def set_loading_state(self, is_loading, message=""):
         """
@@ -477,4 +518,34 @@ class MergeBranchesView(QWidget):
         """
         self.progress_bar.setValue(current_item)
         if message:
-            self.progress_details.setText(message) 
+            self.progress_details.setText(message)
+    
+    def refresh_branches_display(self):
+        """
+        Força a atualização da visualização com as branches existentes.
+        Isso é útil quando as branches foram modificadas externamente.
+        """
+        # Se temos branches originais armazenadas, usar o método normal
+        if hasattr(self, 'original_branches') and hasattr(self, 'protected_branches'):
+            # Limpar completamente todas as listas
+            self.source_branch_combo.clear()
+            self.target_branches_list.clear()
+            
+            # Forçar atualização completa
+            current_source = self.source_branch_combo.currentText() if self.source_branch_combo.count() > 0 else ""
+            
+            # Reconfigurar as branches usando os dados armazenados
+            self.set_branches(self.original_branches, self.protected_branches)
+            
+            # Verificar se tinha alguma branch selecionada anteriormente
+            if current_source and current_source in [self.source_branch_combo.itemText(i) for i in range(self.source_branch_combo.count())]:
+                # Restaurar a seleção e atualizar a lista de targets
+                index = self.source_branch_combo.findText(current_source)
+                if index >= 0:
+                    self.source_branch_combo.setCurrentIndex(index)
+                    self._recreate_target_list(current_source)
+        
+        # Se temos dados de controller armazenados, usar esses dados
+        elif hasattr(self, '_controller_branches') and hasattr(self, '_controller_protected_branches'):
+            # Usar os dados armazenados pelo controller
+            self.set_branches(self._controller_branches, self._controller_protected_branches) 

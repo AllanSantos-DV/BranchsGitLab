@@ -302,10 +302,75 @@ class AppController(QObject):
         self.branch_controller.set_project(self.current_project_id, self.current_project_name)
         self.show_branches_with_tabs()
         
+    def _should_show_merge_tab(self):
+        """
+        Verifica se a aba de merge deve ser exibida
+        
+        Returns:
+            bool: True se a aba de merge deve ser exibida, False caso contrário
+        """
+        # Verificar se há pelo menos duas branches desprotegidas para poder realizar merge
+        if not hasattr(self, 'project_branches') or not hasattr(self, 'selected_protected_branches'):
+            return False
+            
+        # Obter nomes de todas as branches
+        all_branch_names = [branch.name for branch in self.project_branches]
+        
+        # Filtrar apenas branches desprotegidas
+        unprotected_branches = [b for b in all_branch_names if b not in self.selected_protected_branches]
+        
+        # Deve haver pelo menos duas branches desprotegidas para realizar merge
+        return len(unprotected_branches) >= 2
+    
+    def update_merge_tab_branches(self):
+        """
+        Atualiza a lista de branches na aba de merge
+        """
+        if hasattr(self, 'project_branches') and hasattr(self, 'selected_protected_branches'):
+            # Verificar se o controller de merge existe e está inicializado
+            if hasattr(self, 'merge_controller'):
+                # SOLUÇÃO MAIS AGRESSIVA: Forçar recarregamento direto da API do GitLab
+                # para garantir dados atualizados
+                if hasattr(self, 'current_project_id'):
+                    # Recarregar branches diretamente da API
+                    success, result = self.gitlab_api.get_branches(self.current_project_id)
+                    if success:
+                        # Atualizar o modelo interno
+                        self.project_branches = result
+                        
+                        # Atualizar o controller de merge com as branches atualizadas
+                        self.merge_controller.set_project(
+                            self.current_project_id, 
+                            self.current_project_name,
+                            [b.name for b in result],
+                            self.selected_protected_branches
+                        )
+                        
+                        # Forçar refresh da visualização se estiver na aba de merge
+                        current_tab = self.tab_widget.currentWidget()
+                        if current_tab == self.merge_branches_view:
+                            # Forçar atualização visual se a aba estiver visível
+                            if hasattr(self.merge_branches_view, 'refresh_branches_display'):
+                                self.merge_branches_view.refresh_branches_display()
+                else:
+                    # Usar os dados atuais se não for possível recarregar da API
+                    self.merge_controller.set_project(
+                        self.current_project_id, 
+                        self.current_project_name,
+                        [b.name for b in self.project_branches],
+                        self.selected_protected_branches
+                    )
+        
     def show_branches_with_tabs(self):
         """
         Exibe as abas para gerenciamento e merge de branches
         """
+        # Desconectar qualquer conexão anterior para evitar duplicação
+        try:
+            self.tab_widget.currentChanged.disconnect(self._on_tab_changed)
+        except:
+            pass
+            
         self.tab_widget.clear()
         
         # Adicionar aba de gerenciamento de branches (padrão)
@@ -326,31 +391,26 @@ class AppController(QObject):
             
             # Adicionar a aba de merge
             self.tab_widget.addTab(self.merge_branches_view, "Merge de Branches")
+            
+            # Conectar evento de mudança de aba para atualizar branches
+            self.tab_widget.currentChanged.connect(self._on_tab_changed)
         else:
             # Adicionar uma aba desabilitada para fins de UI
             disabled_tab_index = self.tab_widget.addTab(QWidget(), "Merge de Branches")
             self.tab_widget.setTabEnabled(disabled_tab_index, False)
     
-    def _should_show_merge_tab(self):
+    def _on_tab_changed(self, index):
         """
-        Verifica se a aba de merge deve ser exibida
+        Callback para quando a aba atual é alterada
         
-        Returns:
-            bool: True se a aba de merge deve ser exibida, False caso contrário
+        Args:
+            index (int): Índice da aba selecionada
         """
-        # Verificar se há pelo menos duas branches desprotegidas para poder realizar merge
-        if not hasattr(self, 'project_branches') or not hasattr(self, 'selected_protected_branches'):
-            return False
-            
-        # Obter nomes de todas as branches
-        all_branch_names = [branch.name for branch in self.project_branches]
-        
-        # Filtrar apenas branches desprotegidas
-        unprotected_branches = [b for b in all_branch_names if b not in self.selected_protected_branches]
-        
-        # Deve haver pelo menos duas branches desprotegidas para realizar merge
-        return len(unprotected_branches) >= 2
-        
+        tab_name = self.tab_widget.tabText(index)
+        if tab_name == "Merge de Branches":
+            # Atualizar as branches da aba de merge quando ela é selecionada
+            self.update_merge_tab_branches()
+    
     def show_branches(self):
         """
         Exibe a tela de branches (compatibilidade com código existente)
